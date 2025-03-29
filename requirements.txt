@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pymongo
+sqlalchemy
+python-dotenv
+pydantic
+langchain
+langchain-core
+langchain-openai
+openai
+bson
+uuid
+typing_extensions
