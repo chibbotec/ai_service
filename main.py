@@ -12,11 +12,16 @@ app = FastAPI(title="AI Algorithm API with Dual Databases")
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,  # 미들웨어 클래스를 첫 번째 인자로 추가
-    allow_origins=["http://localhost:9000"],  # 실제 환경에서는 구체적인 도메인으로 제한하세요
+    allow_origins=["http://localhost:9000", "http://api.chibbotec.kknaks.site"],  # 실제 환경에서는 구체적인 도메인으로 제한하세요
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 헬스 체크 엔드포인트 추가
+@app.get("/api/v1/health")
+async def health_check():
+  return {"status": "ok"}
 
 # AI 면접 답변 생성 엔드포인트
 @app.post("/api/v1/ai/{space_id}/questions/ai-answer", response_model=InterviewAnswer)
