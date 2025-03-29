@@ -8,6 +8,5 @@ langchain
 langchain-core
 langchain-openai
 openai
-bson
 uuid
 typing_extensions
