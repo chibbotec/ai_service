@@ -65,8 +65,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/ai_server:${{ needs.makeTagAndRelease.outputs.tag_name }},
-            ghcr.io/${{ env.OWNER_LC }}/ai_server:latest
+            ghcr.io/${{ env.OWNER_LC }}/ai_service:${{ needs.makeTagAndRelease.outputs.tag_name }},
+            ghcr.io/${{ env.OWNER_LC }}/ai_service:latest
   deploy:
     runs-on: ubuntu-latest
     needs: [ buildImageAndPush ]
@@ -78,7 +78,7 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            mkdir -p /dockerProjects/chibbotec/ai_server
-            curl -o /dockerProjects/chibbotec/ai_server/zero_downtime_deploy.py https://raw.githubusercontent.com/chibbotec/ai_server/main/zero_downtime_deploy.py
-            chmod +x /dockerProjects/chibbotec/ai_server/zero_downtime_deploy.py
-            python3 /dockerProjects/chibbotec/ai_server/zero_downtime_deploy.py
+            mkdir -p /dockerProjects/chibbotec/ai_service
+            curl -o /dockerProjects/chibbotec/ai_service/zero_downtime_deploy.py https://raw.githubusercontent.com/chibbotec/ai_service/main/infraScript/zero_downtime_deploy.py 
+            chmod +x /dockerProjects/chibbotec/ai_service/zero_downtime_deploy.py
+            python3 /dockerProjects/chibbotec/ai_service/zero_downtime_deploy.py

@@ -13,8 +13,8 @@ class ServiceManager:
         self.socat_port: int = socat_port
         self.sleep_duration: int = sleep_duration
         self.services: Dict[str, int] = {
-            'ai_server_1': 9091,
-            'ai_server_2': 9092
+            'ai_service_1': 9091,
+            'ai_service_2': 9092
         }
         self.current_name: Optional[str] = None
         self.current_port: Optional[int] = None
@@ -26,7 +26,7 @@ class ServiceManager:
         cmd: str = f"ps aux | grep 'socat -t0 TCP-LISTEN:{self.socat_port}' | grep -v grep | awk '{{print $NF}}'"
         current_service: str = subprocess.getoutput(cmd)
         if not current_service:
-            self.current_name, self.current_port = 'ai_server_2', self.services['ai_server_2']
+            self.current_name, self.current_port = 'ai_service_2', self.services['ai_service_2']
         else:
             self.current_port = int(current_service.split(':')[-1])
             self.current_name = next((name for name, port in self.services.items() if port == self.current_port), None)
@@ -50,7 +50,7 @@ class ServiceManager:
 
     def _cleanup_dangling_images(self) -> None:
         # 특정 이미지 중 <none> 태그가 된 이미지만 정리
-        cmd_list = "docker images | grep '.*/chibbotec/ai_server' | grep '<none>'"
+        cmd_list = "docker images | grep '.*/chibbotec/ai_service' | grep '<none>'"
         images = self._run_command(cmd_list)
 
         if not images:
@@ -58,7 +58,7 @@ class ServiceManager:
             return
 
         # 이미지 정리
-        cmd_remove = "docker images | grep '.*/chibbotec/ai_server' | grep '<none>' | awk '{print $3}' | xargs -r docker rmi"
+        cmd_remove = "docker images | grep '.*/chibbotec/ai_service' | grep '<none>' | awk '{print $3}' | xargs -r docker rmi"
         output = self._run_command(cmd_remove)
         print("이미지 정리 완료")
 
@@ -70,7 +70,7 @@ class ServiceManager:
     # Docker 컨테이너를 실행하는 함수
     def _run_container(self, name: str, port: int) -> None:
         os.system(
-            f"docker run -d --name={name} --restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul --pull always ghcr.io/chibbotec/ai_server")
+            f"docker run -d --name={name} --restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul --pull always ghcr.io/chibbotec/ai_service")
 
     def _switch_port(self) -> None:
         # Socat 포트를 전환하는 함수
