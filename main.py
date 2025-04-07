@@ -14,13 +14,13 @@ from db.mongo import add_ai_answer
 app = FastAPI(title="AI Algorithm API with Dual Databases")
 
 # CORS 설정
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["http://localhost:9000", "http://api.chibbotec.kknaks.site"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:9000", "http://api.chibbotec.kknaks.site"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 헬스 체크 엔드포인트 추가
 @app.get("/api/v1/health")
