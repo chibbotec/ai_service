@@ -22,6 +22,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
+
 # 헬스 체크 엔드포인트 추가
 @app.get("/api/v1/health")
 async def health_check():
