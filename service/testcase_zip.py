@@ -7,7 +7,7 @@ async def create_simple_test_case_zip(test_case_id: str, testcases: list) -> str
     zip_path = os.path.join(current_dir, f"{test_case_id}.zip")
     
     # 임시 파일 경로 생성 (현재 디렉토리 내)
-    temp_dir = os.path.join(current_dir, "temp_files")
+    temp_dir = os.path.join(current_dir, f"{test_case_id}")
     os.makedirs(temp_dir, exist_ok=True)
     
     # 테스트 케이스 파일 생성
