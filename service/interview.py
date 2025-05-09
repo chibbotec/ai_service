@@ -60,7 +60,7 @@ async def generate_interview_answer(topic: str, question: str) -> InterviewAnswe
     processing_time = time.time() - start_time
 
     print(f"AI 답변 생성 시간: {processing_time:.2f}초")
-    print(f"AI 답변: {response}초")
+    print(f"AI 답변: {response}")
 
     return response
   except Exception as e:
