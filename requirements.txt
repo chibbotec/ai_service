@@ -10,3 +10,4 @@ langchain-openai
 openai
 uuid
 typing_extensions
+mysql-connector-python
