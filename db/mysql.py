@@ -1,9 +1,14 @@
 
 import mysql.connector
+import os
+from dotenv import load_dotenv
 from mysql.connector import Error
+
+load_dotenv()
 
 class MySQLConnection:
     _instance = None
+
 
     def __new__(cls):
         if cls._instance is None:
@@ -18,11 +23,11 @@ class MySQLConnection:
     def connect(self):
         try:
             self.connection = mysql.connector.connect(
-                host='localhost',
-                port=3306,
-                user='root',
-                password='root123414',
-                database='chibbo_interview'
+                host=os.getenv('MYSQL_HOST'),
+                port=int(os.getenv('MYSQL_PORT', 3306)),
+                user=os.getenv('MYSQL_USER', 'root'),
+                password=os.getenv('MYSQL_PASSWORD', 'root123414'),
+                database=os.getenv('MYSQL_DB_NAME', 'chibbo_interview')
             )
             print("MySQL 데이터베이스 연결 성공")
         except Error as e:
