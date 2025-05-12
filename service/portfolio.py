@@ -47,58 +47,61 @@ prompt = PromptTemplate(
 )
 
 # LLM 모델 설정
-llm = ChatOpenAI(temperature=0.3, model_name="gpt-4o")
+llm = ChatOpenAI(
+    temperature=0.3, 
+    model_name="gpt-4o",  # 더 큰 컨텍스트를 지원하는 모델로 변경
+    max_tokens=4096,  # 출력 토큰 수 제한
+    request_timeout=300  # 타임아웃 시간 증가
+)
 
 # 체인 구성
 chain = prompt | llm | parser
 
-async def generate_portfolio(user_id: str) -> Union[PortfolioData, Dict[str, Any]]:
-    """
-    사용자 소스코드를 기반으로 포트폴리오 내용을 생성합니다.
-    
-    Args:
-        user_id: 사용자 ID
-        
-    Returns:
-        포트폴리오 데이터 또는 에러 정보를 담은 딕셔너리
-    """
+async def generate_portfolio(user_id: str, repositories: list) -> Union[PortfolioData, Dict[str, Any]]:
     start_time = time.time()
     
     try:
-        # 사용자 소스 코드 디렉토리 경로
-        source_dir = Path(f"./data/src/{user_id}")
-        
-        # 디렉토리가 존재하지 않으면 에러 반환
-        if not source_dir.exists():
-            print(f"사용자 {user_id}의 소스 디렉토리가 없습니다.")
-            return {"error": "소스 코드를 찾을 수 없습니다."}
+        if not repositories:
+            print(f"사용자 {user_id}의 저장소 정보가 없습니다.")
+            return {"error": "분석할 저장소가 없습니다."}
             
-        # 소스 코드 파일 읽기
-        source_files = []
-        # for ext in ['*.java', '*.py', '*.js', '*.html', '*.css', '*.ts', '*.jsx', '*.tsx']:
-        for ext in ['*.*']:    
-            source_files.extend(glob.glob(str(source_dir / "**" / ext), recursive=True))
-        
-        # 파일 내용 수집
         code_contents = []
-        for file_path in source_files:
-            rel_path = os.path.relpath(file_path, start=str(source_dir))
+        for repo_path in repositories:
             try:
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = file.read()
-                    # 파일이 너무 크면 일부만 사용
-                    if len(content) > 5000:
-                        content = content[:5000] + "\n... (내용 생략) ..."
-                    
-                    code_contents.append({
-                        "file": rel_path,
-                        "content": content
-                    })
+                # 전체 저장소 경로 구성
+                full_repo_path = Path("repository/data") / repo_path
+                print(f"저장소 경로: {full_repo_path}")
+                
+                # 저장소 내의 모든 파일 검색
+                for file_path in full_repo_path.rglob("*"):
+                    if file_path.is_file() and file_path.suffix.lower() in [
+                        '.py', '.java', '.js', '.html', '.css', '.ts', '.jsx', '.tsx'
+                    ]:
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as file:
+                                content = file.read()
+                                # 파일이 너무 크면 일부만 사용
+                                if len(content) > 5000:
+                                    content = content[:5000] + "\n... (내용 생략) ..."
+                                
+                                code_contents.append({
+                                    "file": str(file_path.relative_to(full_repo_path)),
+                                    "content": content
+                                })
+                                print(f"파일 처리됨: {file_path.name}")
+                        except Exception as e:
+                            print(f"파일 읽기 오류 {file_path}: {str(e)}")
             except Exception as e:
-                print(f"파일 읽기 오류 {file_path}: {str(e)}")
+                print(f"저장소 처리 오류 {repo_path}: {str(e)}")
         
+        if not code_contents:
+            return {"error": "처리 가능한 소스 코드 파일이 없습니다."}
+
         # 소스 코드 텍스트 생성
-        source_code_text = "\n\n".join([f"=== {file['file']} ===\n{file['content']}" for file in code_contents])
+        source_code_text = "\n\n".join([
+            f"=== {file['file']} ===\n{file['content']}" 
+            for file in code_contents
+        ])
         
         # LangChain 체인으로 포트폴리오 생성
         try:
@@ -108,7 +111,6 @@ async def generate_portfolio(user_id: str) -> Union[PortfolioData, Dict[str, Any
             return response
         except Exception as chain_error:
             print(f"포트폴리오 생성 중 파싱 오류: {str(chain_error)}")
-            # 응답을 받았지만 파싱에 실패한 경우, JSON 형식으로 수동 변환 시도
             raw_response = llm.invoke(prompt.format(source_code=source_code_text))
             print(f"원본 응답: {raw_response}")
             return {
@@ -118,7 +120,6 @@ async def generate_portfolio(user_id: str) -> Union[PortfolioData, Dict[str, Any
         
     except Exception as e:
         print(f"포트폴리오 생성 중 오류: {str(e)}")
-        # 오류 발생 시 자세한 정보 반환
         return {
             "error": f"포트폴리오 생성 실패: {str(e)}",
             "processing_time": time.time() - start_time

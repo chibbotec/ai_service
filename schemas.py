@@ -155,6 +155,10 @@ class TestCaseRequest(BaseModel):
     test_case_id: str
     testcases: List[Dict[str, str]]
 
+# 포트폴리오 요청 스키마
+class PortfolioRequest(BaseModel):
+    repositories: List[str]
+
 # 기능 설명 스키마
 class FeatureDetail(BaseModel):
     description: List[str] = Field(description="기능에 대한 상세 설명 목록")

@@ -69,8 +69,13 @@ class ServiceManager:
 
     # Docker 컨테이너를 실행하는 함수
     def _run_container(self, name: str, port: int) -> None:
+        # os.system(
+        #     f"docker run -d --name={name} --restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul --pull always ghcr.io/chibbotec/ai_service")
         os.system(
-            f"docker run -d --name={name} --restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul --pull always ghcr.io/chibbotec/ai_service")
+            f"docker run -d --name={name} --restart unless-stopped -p {port}:9090 "
+            f"-e TZ=Asia/Seoul "
+            f"-v /dockerProjects/chibbotec/resume_service/repository/data:/app/repository/data "  # 새 마운트 추가
+            f"--pull always ghcr.io/chibbotec/ai_service")
 
     def _switch_port(self) -> None:
         # Socat 포트를 전환하는 함수

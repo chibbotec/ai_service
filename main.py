@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from schemas import InterviewQuestionInput, InterviewAnswer, TestCaseInput, TestCaseAnswer, TestCaseRequest
+from schemas import InterviewQuestionInput, InterviewAnswer, TestCaseInput, TestCaseAnswer, TestCaseRequest, PortfolioRequest
 from service.interview import generate_interview_answer
 from service.testcase import generate_test_case_answer
 from service.testcase_zip import create_simple_test_case_zip
@@ -121,12 +121,12 @@ async def generate_test_cases_zip(space_id: str, test_case_id: str, request: Tes
         raise HTTPException(status_code=500, detail=f"ZIP 파일 생성 중 오류: {str(e)}")
 
 @app.post("/api/v1/ai/{space_id}/resume/{user_id}/create-portfolio")
-async def create_portfolio(space_id: str, user_id: str):
+async def create_portfolio(space_id: str, user_id: str, request: PortfolioRequest):
     try:
         print(f"포트폴리오 생성 요청: 사용자 ID={user_id}")
     
         # 포트폴리오 생성 서비스 함수 호출
-        portfolio_data = await generate_portfolio(user_id)
+        portfolio_data = await generate_portfolio(user_id, request.repositories)
         
         return portfolio_data
     except Exception as e:
