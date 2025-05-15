@@ -3,9 +3,6 @@ from schemas import Evaluation, Contest, Problem, ParticipantAnswer
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_openai import ChatOpenAI
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 from dotenv import load_dotenv
 from db.mysql import MySQLConnection
 
@@ -53,11 +50,10 @@ async def get_contest_data(contest_id: int) -> Contest:
     mysql = MySQLConnection()
     
     # 콘테스트 정보 조회
-    contest_query = "SELECT id, title FROM contest WHERE id = %s"
+    contest_query = "SELECT id, title FROM contest WHERE id = %s"\
     
     try:
         print(f"콘테스트 조회 쿼리 실행: {contest_query} with ID={contest_id}")
-        # 동기 실행으로 변경
         result = mysql.execute_query(contest_query, (contest_id,))
         print(f"쿼리 결과: {result}")
         
@@ -67,65 +63,64 @@ async def get_contest_data(contest_id: int) -> Contest:
         contest_result = result[0]
         print(f"콘테스트 정보: {contest_result}")
         
-        # 문제와 답변 정보 조회
-        problems_query = """
-    SELECT 
-        p.id, p.problem, p.ai_answer,
-        a.id as answer_id, a.answer, a.rank_score,
-        pt.id as participant_id, pt.nickname
-    FROM problem p
-    INNER JOIN (
-        SELECT DISTINCT problem_id, id, participant_id, answer, rank_score
-        FROM answer
-        WHERE problem_id IN (
-            SELECT id FROM problem WHERE contest_id = %s
-        )
-    ) a ON p.id = a.problem_id
-    LEFT JOIN participant pt ON a.participant_id = pt.id
-    WHERE p.contest_id = %s
-    ORDER BY p.id, a.id
-"""
+    except Exception as e:
+        print(f"데이터베이스 조회 중 오류 발생: {str(e)}")
+        print(f"오류 타입: {type(e)}")
+        raise Exception(f"콘테스트 조회 실패: {str(e)}")
+    
+    
+    # 문제와 답변 정보 조회
+    problems_query = """
+        SELECT p.id, p.problem, p.ai_answer,
+               a.id as answer_id, a.answer, a.rank_score,
+               pt.id as participant_id, pt.nickname
+        FROM problem p
+        LEFT JOIN answer a ON p.id = a.problem_id
+        LEFT JOIN participant pt ON a.participant_id = pt.id
+        WHERE p.contest_id = %s
+    """
+    
+
+    try:
+        print(f"콘테스트 조회 쿼리 실행: {problems_query} with ID={contest_id}")
+        problems_result = mysql.execute_query(problems_query, (contest_id,))
+        print(f"쿼리 결과: {problems_result}")
         
-        # 동기 실행으로 변경
-        problems_result = mysql.execute_query(problems_query, (contest_id, contest_id))
-        
-        if not problems_result:
-            raise IndexError(f"Contest ID {contest_id}에 대한 문제가 없습니다.")
-        
-        # 데이터 구조화
-        problems_dict = {}
-        for row in problems_result:
-            if row['id'] not in problems_dict:
-                problems_dict[row['id']] = {
-                    'id': row['id'],
-                    'problem': row['problem'],
-                    'ai_answer': row['ai_answer'],
-                    'answers': []
-                }
-            
-            if row['answer_id']:  # 답변이 있는 경우
-                problems_dict[row['id']]['answers'].append(
-                    ParticipantAnswer(
-                        participant_id=row['participant_id'],
-                        nickname=row['nickname'],
-                        answer=row['answer'],
-                        rank_score=row['rank_score']
-                    )
-                )
-        
-        print("콘테스트 데이터 조회 완료")
-        
-        # Contest 객체 생성 및 반환
-        return Contest(
-            id=contest_result['id'],
-            title=contest_result['title'],
-            problems=[Problem(**p) for p in problems_dict.values()]
-        )
+        if not result:
+            raise IndexError(f"Contest ID {contest_id}에 대한 결과가 없습니다.")
         
     except Exception as e:
         print(f"데이터베이스 조회 중 오류 발생: {str(e)}")
         print(f"오류 타입: {type(e)}")
         raise Exception(f"콘테스트 조회 실패: {str(e)}")
+    
+    # 데이터 구조화
+    problems_dict = {}
+    for row in problems_result:
+        if row['id'] not in problems_dict:
+            problems_dict[row['id']] = {
+                'id': row['id'],
+                'problem': row['problem'],
+                'ai_answer': row['ai_answer'],
+                'answers': []
+            }
+        
+        if row['answer_id']:  # 답변이 있는 경우
+            problems_dict[row['id']]['answers'].append(
+                ParticipantAnswer(
+                    participant_id=row['participant_id'],
+                    nickname=row['nickname'],
+                    answer=row['answer'],
+                    rank_score=row['rank_score']
+                )
+            )
+    print("콘테스트 데이터 조회 완료")
+    # Contest 객체 생성
+    return Contest(
+        id=contest_result['id'],
+        title=contest_result['title'],
+        problems=[Problem(**p) for p in problems_dict.values()]
+    )
 
 async def update_rank_score(problem_id: int, participant_id: int, score: int, feedback: str):
     """평가 점수를 DB에 업데이트"""
@@ -194,53 +189,36 @@ async def evaluate_answer(problem: str, ai_answer: str, participant_answer: str)
 
 async def evaluate_contest_answers(contest_id: int) -> List[Evaluation]:
     print("\n=== 콘테스트 답변 평가 시작 ===")
-    
+    """콘테스트의 모든 답변 평가"""
     # 콘테스트 데이터 조회
     contest = await get_contest_data(contest_id)
     evaluations = []
-    
-    async def process_answer(problem, participant_answer):
-        try:
+    print("콘테스트 데이터 조회 완료2")
+    # 각 문제별로 모든 참가자의 답변 평가
+    for problem in contest.problems:
+        # 쓰레드로 만들 수 있나???=================
+        for participant_answer in problem.answers:
             evaluation = await evaluate_answer(
                 problem=problem.problem,
                 ai_answer=problem.ai_answer,
                 participant_answer=participant_answer.answer
             )
-            
             # 평가 결과 저장
             participant_answer.rank_score = evaluation.score
-            result = {
+            evaluations.append({
                 'problem_id': problem.id,
                 'participant_id': participant_answer.participant_id,
                 'evaluation': evaluation
-            }
+            })
             
             # DB 업데이트
+            print(f"DB 업데이트: 문제 ID {problem.id}, 참가자 ID {participant_answer.participant_id}, 점수 {evaluation.score}")
             await update_rank_score(
                 problem_id=problem.id,
                 participant_id=participant_answer.participant_id,
                 score=evaluation.score,
                 feedback=evaluation.feedback
             )
-            
-            return result
-        except Exception as e:
-            print(f"답변 평가 중 오류 발생: {str(e)}")
-            return None
-
-    # 모든 답변에 대한 평가 작업 생성
-    tasks = []
-    for problem in contest.problems:
-        for participant_answer in problem.answers:
-            task = process_answer(problem, participant_answer)
-            tasks.append(task)
-    
-    # 동시에 실행 (기본값: 5개씩)
-    chunk_size = 5
-    for i in range(0, len(tasks), chunk_size):
-        chunk = tasks[i:i + chunk_size]
-        chunk_results = await asyncio.gather(*chunk)
-        evaluations.extend([r for r in chunk_results if r is not None])
     
     # 모든 평가가 완료되면 콘테스트 상태 업데이트
     await update_contest_status(contest_id)
