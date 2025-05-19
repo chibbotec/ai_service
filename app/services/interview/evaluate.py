@@ -22,6 +22,7 @@ from app.metrics import (
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+import os
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -212,8 +213,7 @@ async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> L
 
 @dramatiq.actor(store_results=True)
 def evaluate_single_answer(problem_id: int, participant_id: int, 
-                         question: str, ai_answer: str, participant_answer: str,
-                         db_url: str):  # DB 연결 정보 추가
+                         question: str, ai_answer: str, participant_answer: str):
     """개별 답변 평가를 위한 Dramatiq 액터"""
     try:
         logger.info(f"[Worker] 답변 평가 시작 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
@@ -224,6 +224,17 @@ def evaluate_single_answer(problem_id: int, participant_id: int,
             "ai_answer": ai_answer,
             "participant_answer": participant_answer
         })
+        
+        # DB 연결 정보를 환경 변수에서 가져오기
+        db_host = os.getenv('DB_HOST', '172.30.1.23')
+        db_port = os.getenv('DB_PORT', '3306')
+        db_name = os.getenv('DB_NAME', 'chibbo_interview')
+        db_user = os.getenv('DB_USER', 'root')
+        db_password = os.getenv('DB_PASSWORD', '')
+        
+        # DB URL 생성
+        db_url = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        logger.info(f"[Worker] DB 연결 시도 - Host: {db_host}")
         
         # DB 세션 생성 및 결과 저장
         engine = create_engine(db_url)
@@ -241,6 +252,8 @@ def evaluate_single_answer(problem_id: int, participant_id: int,
                 answer.feedback = evaluation.feedback
                 db.commit()
                 logger.info(f"[Worker] DB 저장 완료 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
+            else:
+                logger.warning(f"[Worker] 답변을 찾을 수 없음 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
         except Exception as e:
             db.rollback()
             logger.error(f"[Worker] DB 저장 실패 - 문제ID: {problem_id}, 참가자ID: {participant_id}: {str(e)}")
@@ -274,10 +287,6 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         total_answers = sum(len(p['answers']) for p in problems)
         logger.info(f"[Parallel] 평가 시작 - 총 {len(problems)}개 문제, {total_answers}개 답변")
         
-        # DB URL 가져오기
-        db_url = str(db.get_bind().url)
-        logger.info(f"[Parallel] DB URL: {db_url}")
-        
         # 모든 평가 작업을 큐에 추가
         for problem in problems:
             for answer in problem['answers']:
@@ -288,8 +297,7 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
                     participant_id=answer['participant_id'],
                     question=problem['question'],
                     ai_answer=problem['ai_answer'],
-                    participant_answer=answer['answer'],
-                    db_url=db_url
+                    participant_answer=answer['answer']
                 )
                 message_ids.append(message.message_id)
                 logger.info(f"[Parallel] 평가 작업 큐에 추가 - Message ID: {message.message_id}")
