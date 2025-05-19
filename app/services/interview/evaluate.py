@@ -22,6 +22,8 @@ from app.metrics import (
 
 load_dotenv()
 
+redis_conn = RedisConnection()
+
 # LLM 모델과 파서 초기화
 parser = PydanticOutputParser(pydantic_object=Evaluation)
 
@@ -197,7 +199,6 @@ async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> L
         raise e
     
 
-# Dramatiq를 사용한 병렬 처리 방식
 @dramatiq.actor(store_results=True)
 def evaluate_single_answer(problem_id: int, participant_id: int, 
                          question: str, ai_answer: str, participant_answer: str):
