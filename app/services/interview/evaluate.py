@@ -276,6 +276,7 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         
         # DB URL 가져오기
         db_url = str(db.get_bind().url)
+        logger.info(f"[Parallel] DB URL: {db_url}")
         
         # 모든 평가 작업을 큐에 추가
         for problem in problems:
@@ -291,12 +292,19 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
                     db_url=db_url
                 )
                 message_ids.append(message.message_id)
+                logger.info(f"[Parallel] 평가 작업 큐에 추가 - Message ID: {message.message_id}")
         
         # 모든 메시지가 완료될 때까지 대기
         for message_id in message_ids:
             try:
-                message = dramatiq.Message.get(message_id)
-                message.wait()  # 메시지가 완료될 때까지 대기
+                # 메시지 상태 확인
+                broker = dramatiq.get_broker()
+                message = broker.get_message(message_id)
+                if message:
+                    message.wait()
+                    logger.info(f"[Parallel] 평가 작업 완료 - Message ID: {message_id}")
+                else:
+                    logger.error(f"[Parallel] 메시지를 찾을 수 없음 - Message ID: {message_id}")
             except Exception as e:
                 logger.error(f"[Parallel] 메시지 완료 대기 중 오류 발생 - Message ID: {message_id}: {str(e)}")
                 continue
@@ -308,7 +316,7 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         logger.info(f"[Parallel] 평가 완료 - 소요시간: {duration:.2f}초, 성공: {len(message_ids)}개")
         
         await update_contest_status(db, contest_id)
-        return [{"status": "completed"} for _ in message_ids]  # 단순 완료 상태 반환
+        return [{"status": "completed"} for _ in message_ids]
         
     except Exception as e:
         EVALUATION_ERROR_COUNTER.labels(
