@@ -72,7 +72,7 @@ class ServiceManager:
         # os.system(
         #     f"docker run -d --name={name} --restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul --pull always ghcr.io/chibbotec/ai_service")
         os.system(
-            f"docker run -d --name={name} --network=chibbotec-network"
+            f"docker run -d --name={name} --network=chibbotec-network "
             f"--network-alias=ai "
             f"--restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul "
             f"-v /dockerProjects/chibbotec/resume_service/repository/data:/app/repository/data "  # 새 마운트 추가

@@ -13,4 +13,5 @@ typing_extensions
 mysql-connector-python
 dramatiq
 psutil
+redis
 prometheus-client
