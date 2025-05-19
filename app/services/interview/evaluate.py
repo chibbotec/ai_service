@@ -20,6 +20,8 @@ from app.metrics import (
     update_system_metrics
 )
 import logging
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -210,7 +212,8 @@ async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> L
 
 @dramatiq.actor(store_results=True)
 def evaluate_single_answer(problem_id: int, participant_id: int, 
-                         question: str, ai_answer: str, participant_answer: str):
+                         question: str, ai_answer: str, participant_answer: str,
+                         db_url: str):  # DB 연결 정보 추가
     """개별 답변 평가를 위한 Dramatiq 액터"""
     try:
         logger.info(f"[Worker] 답변 평가 시작 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
@@ -221,6 +224,29 @@ def evaluate_single_answer(problem_id: int, participant_id: int,
             "ai_answer": ai_answer,
             "participant_answer": participant_answer
         })
+        
+        # DB 세션 생성 및 결과 저장
+        engine = create_engine(db_url)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+        
+        try:
+            answer = db.query(Answer).filter(
+                Answer.problem_id == problem_id,
+                Answer.participant_id == participant_id
+            ).first()
+            
+            if answer:
+                answer.rank_score = evaluation.score
+                answer.feedback = evaluation.feedback
+                db.commit()
+                logger.info(f"[Worker] DB 저장 완료 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"[Worker] DB 저장 실패 - 문제ID: {problem_id}, 참가자ID: {participant_id}: {str(e)}")
+            raise e
+        finally:
+            db.close()
         
         duration = time.time() - start_time
         logger.info(f"[Worker] 답변 평가 완료 - 문제ID: {problem_id}, 참가자ID: {participant_id}, 소요시간: {duration:.2f}초")
@@ -248,6 +274,9 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         total_answers = sum(len(p['answers']) for p in problems)
         logger.info(f"[Parallel] 평가 시작 - 총 {len(problems)}개 문제, {total_answers}개 답변")
         
+        # DB URL 가져오기
+        db_url = str(db.get_bind().url)
+        
         # 모든 평가 작업을 큐에 추가
         for problem in problems:
             for answer in problem['answers']:
@@ -258,22 +287,21 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
                     participant_id=answer['participant_id'],
                     question=problem['question'],
                     ai_answer=problem['ai_answer'],
-                    participant_answer=answer['answer']
+                    participant_answer=answer['answer'],
+                    db_url=db_url  # DB URL 전달
                 )
                 message_ids.append(message.message_id)
         
-        # 모든 결과 수집
+        # 모든 결과 수집 (DB 저장은 이미 완료됨)
         evaluations = []
         for message_id in message_ids:
-            result = evaluate_single_answer.get_result(message_id, block=True)
-            await update_evaluation(
-                db=db,
-                problem_id=result['problem_id'],
-                participant_id=result['participant_id'],
-                score=result['evaluation']['score'],
-                feedback=result['evaluation']['feedback']
-            )
-            evaluations.append(result)
+            try:
+                result = Results(backend=RedisBackend()).get_result(message_id, block=True)
+                if result:
+                    evaluations.append(result)
+            except Exception as e:
+                logger.error(f"[Parallel] 개별 평가 결과 처리 중 오류 발생 - Message ID: {message_id}: {str(e)}")
+                continue
         
         duration = time.time() - start_time
         EVALUATION_DURATION.labels(method="parallel").observe(duration)
