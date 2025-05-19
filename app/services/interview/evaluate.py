@@ -288,29 +288,27 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
                     question=problem['question'],
                     ai_answer=problem['ai_answer'],
                     participant_answer=answer['answer'],
-                    db_url=db_url  # DB URL 전달
+                    db_url=db_url
                 )
                 message_ids.append(message.message_id)
         
-        # 모든 결과 수집 (DB 저장은 이미 완료됨)
-        evaluations = []
+        # 모든 메시지가 완료될 때까지 대기
         for message_id in message_ids:
             try:
-                result = Results(backend=RedisBackend()).get_result(message_id, block=True)
-                if result:
-                    evaluations.append(result)
+                message = dramatiq.Message.get(message_id)
+                message.wait()  # 메시지가 완료될 때까지 대기
             except Exception as e:
-                logger.error(f"[Parallel] 개별 평가 결과 처리 중 오류 발생 - Message ID: {message_id}: {str(e)}")
+                logger.error(f"[Parallel] 메시지 완료 대기 중 오류 발생 - Message ID: {message_id}: {str(e)}")
                 continue
         
         duration = time.time() - start_time
         EVALUATION_DURATION.labels(method="parallel").observe(duration)
-        EVALUATION_COUNTER.labels(method="parallel", status="success").inc(len(evaluations))
+        EVALUATION_COUNTER.labels(method="parallel", status="success").inc(len(message_ids))
         
-        logger.info(f"[Parallel] 평가 완료 - 소요시간: {duration:.2f}초, 성공: {len(evaluations)}개")
+        logger.info(f"[Parallel] 평가 완료 - 소요시간: {duration:.2f}초, 성공: {len(message_ids)}개")
         
         await update_contest_status(db, contest_id)
-        return evaluations
+        return [{"status": "completed"} for _ in message_ids]  # 단순 완료 상태 반환
         
     except Exception as e:
         EVALUATION_ERROR_COUNTER.labels(
