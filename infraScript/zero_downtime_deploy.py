@@ -118,7 +118,7 @@ class ServiceManager:
             print(f"Waiting for {self.next_name} to be 'UP'... (시도 {retry_count+1}/{max_retries})")
             time.sleep(self.sleep_duration)
             retry_count += 1
-
+# ㅇㅇ
         if retry_count >= max_retries:
             print(f"ERROR: {self.next_name}가 {max_retries*self.sleep_duration}초 이내에 시작되지 않았습니다.")
             return
