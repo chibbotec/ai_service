@@ -1,4 +1,4 @@
-name: 'AI Server Deploy'
+name: 'AI Server Deploy'  
 on:
   push:
     paths:
