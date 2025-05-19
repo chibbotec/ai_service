@@ -7,7 +7,7 @@ from app.db.mongodb.connection import MongoDBConnection
 from app.db.mysql.connection import MySQLConnection
 
 from app.api.routes import (
-    health_router,
+    metrics_router,
     coding_test_router,
     resume_router,
     interview_router
@@ -45,7 +45,7 @@ app = FastAPI(
 )
 
 # 라우터 등록
-app.include_router(health_router)
+app.include_router(metrics_router)
 app.include_router(coding_test_router)
 app.include_router(resume_router)
 app.include_router(interview_router)

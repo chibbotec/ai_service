@@ -1,4 +1,5 @@
 from typing import List, Dict, Any
+from app.db.redis.connection import RedisConnection
 from app.schemas.interview import Evaluation
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -7,6 +8,17 @@ import asyncio
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from app.db.mysql.models import Problem, TechInterview, Answer, Participant, Contest, Submit
+import dramatiq
+import time
+from dramatiq.brokers.redis import RedisBroker
+from dramatiq.results import Results
+from dramatiq.results.backends import RedisBackend
+from app.metrics import (
+    EVALUATION_DURATION,
+    EVALUATION_COUNTER,
+    EVALUATION_ERROR_COUNTER,
+    update_system_metrics
+)
 
 load_dotenv()
 
@@ -123,10 +135,11 @@ async def update_contest_status(db: Session, contest_id: int):
         print(f"콘테스트 상태 업데이트 실패: {str(e)}")
         raise e
 
-async def evaluate_contest_answers(db: Session, contest_id: int) -> List[Dict[str, Any]]:
+async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> List[Dict[str, Any]]:
     """콘테스트의 모든 답변 평가"""
     try:
         # 문제와 답변 데이터 조회
+        start_time = time.time()
         problems = await get_problems_data(db, contest_id)
         evaluations = []
         
@@ -134,6 +147,8 @@ async def evaluate_contest_answers(db: Session, contest_id: int) -> List[Dict[st
         for problem in problems:
             for answer in problem['answers']:
                 try:
+                    update_system_metrics('sequential')
+
                     evaluation = await evaluate_answer(
                         problem=problem['question'],
                         ai_answer=problem['ai_answer'],
@@ -157,8 +172,16 @@ async def evaluate_contest_answers(db: Session, contest_id: int) -> List[Dict[st
                     })
                     
                 except Exception as e:
+                    EVALUATION_ERROR_COUNTER.labels(
+                        method="sequential",
+                        error_type=type(e).__name__
+                    ).inc()
                     print(f"답변 평가 중 오류 발생: {str(e)}")
                     continue
+
+        duration = time.time() - start_time
+        EVALUATION_DURATION.labels(method="sequential").observe(duration)
+        EVALUATION_COUNTER.labels(method="sequential", status="success").inc(len(evaluations))
         
         # 모든 평가가 완료되면 콘테스트 상태 업데이트
         await update_contest_status(db, contest_id)
@@ -166,5 +189,83 @@ async def evaluate_contest_answers(db: Session, contest_id: int) -> List[Dict[st
         return evaluations
         
     except Exception as e:
+        EVALUATION_ERROR_COUNTER.labels(
+            method="sequential",
+            error_type=type(e).__name__
+        ).inc()
+        print(f"콘테스트 평가 중 오류 발생: {str(e)}")
+        raise e
+    
+
+# Dramatiq를 사용한 병렬 처리 방식
+@dramatiq.actor(store_results=True)
+def evaluate_single_answer(problem_id: int, participant_id: int, 
+                         question: str, ai_answer: str, participant_answer: str):
+    """개별 답변 평가를 위한 Dramatiq 액터"""
+    try:
+        evaluation = chain.invoke({
+            "problem": question,
+            "ai_answer": ai_answer,
+            "participant_answer": participant_answer
+        })
+        return {
+            'problem_id': problem_id,
+            'participant_id': participant_id,
+            'evaluation': evaluation.dict()
+        }
+    except Exception as e:
+        EVALUATION_ERROR_COUNTER.labels(
+            method="parallel",
+            error_type=type(e).__name__
+        ).inc()
+        raise e
+
+async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> List[Dict[str, Any]]:
+    """Dramatiq를 사용한 병렬 처리 방식으로 평가를 수행"""
+    try:
+        start_time = time.time()
+        problems = await get_problems_data(db, contest_id)
+        message_ids = []
+        
+        # 모든 평가 작업을 큐에 추가
+        for problem in problems:
+            for answer in problem['answers']:
+
+                update_system_metrics('parallel')
+
+                message = evaluate_single_answer.send(
+                    problem_id=problem['id'],
+                    participant_id=answer['participant_id'],
+                    question=problem['question'],
+                    ai_answer=problem['ai_answer'],
+                    participant_answer=answer['answer']
+                )
+                message_ids.append(message.message_id)
+        
+        # 모든 결과 수집
+        evaluations = []
+        for message_id in message_ids:
+            result = evaluate_single_answer.get_result(message_id, block=True)
+            await update_evaluation(
+                db=db,
+                problem_id=result['problem_id'],
+                participant_id=result['participant_id'],
+                score=result['evaluation']['score'],
+                feedback=result['evaluation']['feedback']
+            )
+            evaluations.append(result)
+        
+        duration = time.time() - start_time
+        EVALUATION_DURATION.labels(method="parallel").observe(duration)
+        EVALUATION_COUNTER.labels(method="parallel", status="success").inc(len(evaluations))
+        
+        await update_contest_status(db, contest_id)
+        return evaluations
+        
+    except Exception as e:
+        EVALUATION_ERROR_COUNTER.labels(
+            method="parallel",
+            error_type=type(e).__name__
+        ).inc()
         print(f"콘테스트 평가 중 오류 발생: {str(e)}")
         raise e
