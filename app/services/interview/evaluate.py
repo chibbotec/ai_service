@@ -19,6 +19,11 @@ from app.metrics import (
     EVALUATION_ERROR_COUNTER,
     update_system_metrics
 )
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -145,6 +150,8 @@ async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> L
         problems = await get_problems_data(db, contest_id)
         evaluations = []
         
+        logger.info(f"[Sequential] 평가 시작 - 총 {len(problems)}개 문제, {sum(len(p['answers']) for p in problems)}개 답변")
+        
         # 각 문제의 답변 평가
         for problem in problems:
             for answer in problem['answers']:
@@ -178,12 +185,14 @@ async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> L
                         method="sequential",
                         error_type=type(e).__name__
                     ).inc()
-                    print(f"답변 평가 중 오류 발생: {str(e)}")
+                    logger.error(f"[Sequential] 답변 평가 중 오류 발생: {str(e)}")
                     continue
 
         duration = time.time() - start_time
         EVALUATION_DURATION.labels(method="sequential").observe(duration)
         EVALUATION_COUNTER.labels(method="sequential", status="success").inc(len(evaluations))
+        
+        logger.info(f"[Sequential] 평가 완료 - 소요시간: {duration:.2f}초, 성공: {len(evaluations)}개")
         
         # 모든 평가가 완료되면 콘테스트 상태 업데이트
         await update_contest_status(db, contest_id)
@@ -195,7 +204,7 @@ async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> L
             method="sequential",
             error_type=type(e).__name__
         ).inc()
-        print(f"콘테스트 평가 중 오류 발생: {str(e)}")
+        logger.error(f"[Sequential] 콘테스트 평가 중 오류 발생: {str(e)}")
         raise e
     
 
@@ -204,11 +213,18 @@ def evaluate_single_answer(problem_id: int, participant_id: int,
                          question: str, ai_answer: str, participant_answer: str):
     """개별 답변 평가를 위한 Dramatiq 액터"""
     try:
+        logger.info(f"[Worker] 답변 평가 시작 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
+        start_time = time.time()
+        
         evaluation = chain.invoke({
             "problem": question,
             "ai_answer": ai_answer,
             "participant_answer": participant_answer
         })
+        
+        duration = time.time() - start_time
+        logger.info(f"[Worker] 답변 평가 완료 - 문제ID: {problem_id}, 참가자ID: {participant_id}, 소요시간: {duration:.2f}초")
+        
         return {
             'problem_id': problem_id,
             'participant_id': participant_id,
@@ -219,6 +235,7 @@ def evaluate_single_answer(problem_id: int, participant_id: int,
             method="parallel",
             error_type=type(e).__name__
         ).inc()
+        logger.error(f"[Worker] 답변 평가 중 오류 발생 - 문제ID: {problem_id}, 참가자ID: {participant_id}: {str(e)}")
         raise e
 
 async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> List[Dict[str, Any]]:
@@ -228,10 +245,12 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         problems = await get_problems_data(db, contest_id)
         message_ids = []
         
+        total_answers = sum(len(p['answers']) for p in problems)
+        logger.info(f"[Parallel] 평가 시작 - 총 {len(problems)}개 문제, {total_answers}개 답변")
+        
         # 모든 평가 작업을 큐에 추가
         for problem in problems:
             for answer in problem['answers']:
-
                 update_system_metrics('parallel')
 
                 message = evaluate_single_answer.send(
@@ -260,6 +279,8 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         EVALUATION_DURATION.labels(method="parallel").observe(duration)
         EVALUATION_COUNTER.labels(method="parallel", status="success").inc(len(evaluations))
         
+        logger.info(f"[Parallel] 평가 완료 - 소요시간: {duration:.2f}초, 성공: {len(evaluations)}개")
+        
         await update_contest_status(db, contest_id)
         return evaluations
         
@@ -268,5 +289,5 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
             method="parallel",
             error_type=type(e).__name__
         ).inc()
-        print(f"콘테스트 평가 중 오류 발생: {str(e)}")
+        logger.error(f"[Parallel] 콘테스트 평가 중 오류 발생: {str(e)}")
         raise e
