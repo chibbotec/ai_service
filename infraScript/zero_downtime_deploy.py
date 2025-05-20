@@ -69,13 +69,12 @@ class ServiceManager:
 
     # Docker 컨테이너를 실행하는 함수
     def _run_container(self, name: str, port: int) -> None:
-        # os.system(
-        #     f"docker run -d --name={name} --restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul --pull always ghcr.io/chibbotec/ai_service")
         os.system(
             f"docker run -d --name={name} --network=chibbotec-network "
             f"--network-alias=ai "
             f"--restart unless-stopped -p {port}:9090 -e TZ=Asia/Seoul "
-            f"-v /dockerProjects/chibbotec/resume_service/repository/data:/app/repository/data "  # 새 마운트 추가
+            f"-e DB_HOST=172.30.1.23 -e DB_PORT=3306 -e DB_NAME=chibbo_interview -e DB_USER=root -e DB_PASSWORD=your_password "
+            f"-v /dockerProjects/chibbotec/resume_service/repository/data:/app/repository/data "
             f"--pull always ghcr.io/chibbotec/ai_service")
 
     def _switch_port(self) -> None:
@@ -124,7 +123,7 @@ class ServiceManager:
             return
         
         # Dramatiq 워커 실행 (기존 컨테이너에서)
-        os.system(f"docker exec -d {self.next_name} bash -c 'PYTHONPATH=/app dramatiq app.workers.evaluation_worker --processes 4 --threads 4'")
+        os.system(f"docker exec -d {self.next_name} bash -c 'PYTHONPATH=/app dramatiq app.workers.evaluation_worker --processes 4 --threads 4 --no-prometheus'")
         print(f"Dramatiq 워커 실행 완료: {self.next_name}")
         
         self._switch_port()

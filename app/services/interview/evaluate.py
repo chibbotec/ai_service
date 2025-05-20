@@ -1,5 +1,4 @@
 from typing import List, Dict, Any
-from app.db.redis.connection import RedisConnection
 from app.schemas.interview import Evaluation
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -29,8 +28,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-
-redis_conn = RedisConnection()
 
 # LLM 모델과 파서 초기화
 parser = PydanticOutputParser(pydantic_object=Evaluation)
@@ -211,125 +208,154 @@ async def evaluate_contest_answers_sequential(db: Session, contest_id: int) -> L
         raise e
     
 
-@dramatiq.actor(store_results=True)
-def evaluate_single_answer(problem_id: int, participant_id: int, 
-                         question: str, ai_answer: str, participant_answer: str):
-    """개별 답변 평가를 위한 Dramatiq 액터"""
-    try:
-        logger.info(f"[Worker] 답변 평가 시작 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
-        start_time = time.time()
-        
-        evaluation = chain.invoke({
-            "problem": question,
-            "ai_answer": ai_answer,
-            "participant_answer": participant_answer
-        })
-        
-        # DB 연결 정보를 환경 변수에서 가져오기
-        db_host = os.getenv('DB_HOST', '172.30.1.23')
-        db_port = os.getenv('DB_PORT', '3306')
-        db_name = os.getenv('DB_NAME', 'chibbo_interview')
-        db_user = os.getenv('DB_USER', 'root')
-        db_password = os.getenv('DB_PASSWORD', '')
-        
-        # DB URL 생성
-        db_url = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-        logger.info(f"[Worker] DB 연결 시도 - Host: {db_host}")
-        
-        # DB 세션 생성 및 결과 저장
-        engine = create_engine(db_url)
-        Session = sessionmaker(bind=engine)
-        db = Session()
-        
+class EvaluationWorker:
+    def __init__(self, worker_id: int, db: Session):
+        self.worker_id = worker_id
+        self.db = db
+        self.is_running = False
+
+    async def process_evaluation(self, task: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            answer = db.query(Answer).filter(
-                Answer.problem_id == problem_id,
-                Answer.participant_id == participant_id
+            logger.info(f"[Worker {self.worker_id}] 답변 평가 시작 - 문제ID: {task['problem_id']}")
+            start_time = time.time()
+            
+            evaluation = chain.invoke({
+                "problem": task['question'],
+                "ai_answer": task['ai_answer'],
+                "participant_answer": task['participant_answer']
+            })
+            
+            # DB에 결과 저장
+            answer = self.db.query(Answer).filter(
+                Answer.problem_id == task['problem_id'],
+                Answer.participant_id == task['participant_id']
             ).first()
             
             if answer:
                 answer.rank_score = evaluation.score
                 answer.feedback = evaluation.feedback
-                db.commit()
-                logger.info(f"[Worker] DB 저장 완료 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
+                self.db.commit()
+                logger.info(f"[Worker {self.worker_id}] DB 저장 완료 - 문제ID: {task['problem_id']}")
             else:
-                logger.warning(f"[Worker] 답변을 찾을 수 없음 - 문제ID: {problem_id}, 참가자ID: {participant_id}")
+                logger.warning(f"[Worker {self.worker_id}] 답변을 찾을 수 없음 - 문제ID: {task['problem_id']}")
+            
+            duration = time.time() - start_time
+            logger.info(f"[Worker {self.worker_id}] 답변 평가 완료 - 소요시간: {duration:.2f}초")
+            
+            return {
+                'problem_id': task['problem_id'],
+                'participant_id': task['participant_id'],
+                'evaluation': evaluation.dict(),
+                'status': 'success'
+            }
+            
         except Exception as e:
-            db.rollback()
-            logger.error(f"[Worker] DB 저장 실패 - 문제ID: {problem_id}, 참가자ID: {participant_id}: {str(e)}")
-            raise e
-        finally:
-            db.close()
+            self.db.rollback()
+            logger.error(f"[Worker {self.worker_id}] 평가 실패: {str(e)}")
+            return {
+                'problem_id': task['problem_id'],
+                'participant_id': task['participant_id'],
+                'status': 'error',
+                'error': str(e)
+            }
+
+class EvaluationQueue:
+    def __init__(self, num_workers: int = 3):
+        self.queue = asyncio.Queue()
+        self.workers = []
+        self.num_workers = num_workers
+        self.results = []
+        self.is_processing = False
+
+    async def add_task(self, task: Dict[str, Any]):
+        await self.queue.put(task)
+
+    async def start_workers(self, db: Session):
+        self.is_processing = True
+        self.workers = [
+            EvaluationWorker(i, db) for i in range(self.num_workers)
+        ]
         
-        duration = time.time() - start_time
-        logger.info(f"[Worker] 답변 평가 완료 - 문제ID: {problem_id}, 참가자ID: {participant_id}, 소요시간: {duration:.2f}초")
+        # 워커 시작
+        worker_tasks = [
+            self._worker_loop(worker) for worker in self.workers
+        ]
         
-        return {
-            'problem_id': problem_id,
-            'participant_id': participant_id,
-            'evaluation': evaluation.dict()
-        }
-    except Exception as e:
-        EVALUATION_ERROR_COUNTER.labels(
-            method="parallel",
-            error_type=type(e).__name__
-        ).inc()
-        logger.error(f"[Worker] 답변 평가 중 오류 발생 - 문제ID: {problem_id}, 참가자ID: {participant_id}: {str(e)}")
-        raise e
+        # 모든 워커가 완료될 때까지 대기
+        await asyncio.gather(*worker_tasks)
+        self.is_processing = False
+
+    async def _worker_loop(self, worker: EvaluationWorker):
+        while self.is_processing:
+            try:
+                # 큐에서 작업 가져오기
+                task = await self.queue.get()
+                
+                # 작업 처리
+                result = await worker.process_evaluation(task)
+                self.results.append(result)
+                
+                # 작업 완료 표시
+                self.queue.task_done()
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"워커 {worker.worker_id} 오류: {str(e)}")
+                continue
+
+    def get_results(self) -> List[Dict[str, Any]]:
+        return self.results
 
 async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> List[Dict[str, Any]]:
-    """Dramatiq를 사용한 병렬 처리 방식으로 평가를 수행"""
+    """워커와 큐를 사용한 병렬 처리 방식으로 평가를 수행"""
     try:
         start_time = time.time()
         problems = await get_problems_data(db, contest_id)
-        message_ids = []
+        
+        # 평가 큐 초기화 (워커 수는 시스템 리소스에 따라 조정)
+        evaluation_queue = EvaluationQueue(num_workers=3)
         
         total_answers = sum(len(p['answers']) for p in problems)
-        logger.info(f"[Parallel] 평가 시작 - 총 {len(problems)}개 문제, {total_answers}개 답변")
+        logger.info(f"[Queue] 평가 시작 - 총 {len(problems)}개 문제, {total_answers}개 답변")
         
         # 모든 평가 작업을 큐에 추가
         for problem in problems:
             for answer in problem['answers']:
                 update_system_metrics('parallel')
-
-                message = evaluate_single_answer.send(
-                    problem_id=problem['id'],
-                    participant_id=answer['participant_id'],
-                    question=problem['question'],
-                    ai_answer=problem['ai_answer'],
-                    participant_answer=answer['answer']
-                )
-                message_ids.append(message.message_id)
-                logger.info(f"[Parallel] 평가 작업 큐에 추가 - Message ID: {message.message_id}")
+                
+                task = {
+                    'problem_id': problem['id'],
+                    'participant_id': answer['participant_id'],
+                    'question': problem['question'],
+                    'ai_answer': problem['ai_answer'],
+                    'participant_answer': answer['answer']
+                }
+                await evaluation_queue.add_task(task)
         
-        # 모든 메시지가 완료될 때까지 대기
-        for message_id in message_ids:
-            try:
-                # 메시지 상태 확인
-                broker = dramatiq.get_broker()
-                message = broker.get_message(message_id)
-                if message:
-                    message.wait()
-                    logger.info(f"[Parallel] 평가 작업 완료 - Message ID: {message_id}")
-                else:
-                    logger.error(f"[Parallel] 메시지를 찾을 수 없음 - Message ID: {message_id}")
-            except Exception as e:
-                logger.error(f"[Parallel] 메시지 완료 대기 중 오류 발생 - Message ID: {message_id}: {str(e)}")
-                continue
+        # 워커 시작 및 모든 작업 완료 대기
+        await evaluation_queue.start_workers(db)
+        
+        # 결과 수집
+        evaluations = evaluation_queue.get_results()
+        successful_evaluations = [
+            eval for eval in evaluations 
+            if eval['status'] == 'success'
+        ]
         
         duration = time.time() - start_time
         EVALUATION_DURATION.labels(method="parallel").observe(duration)
-        EVALUATION_COUNTER.labels(method="parallel", status="success").inc(len(message_ids))
+        EVALUATION_COUNTER.labels(method="parallel", status="success").inc(len(successful_evaluations))
         
-        logger.info(f"[Parallel] 평가 완료 - 소요시간: {duration:.2f}초, 성공: {len(message_ids)}개")
+        logger.info(f"[Queue] 평가 완료 - 소요시간: {duration:.2f}초, 성공: {len(successful_evaluations)}개")
         
         await update_contest_status(db, contest_id)
-        return [{"status": "completed"} for _ in message_ids]
+        return successful_evaluations
         
     except Exception as e:
         EVALUATION_ERROR_COUNTER.labels(
             method="parallel",
             error_type=type(e).__name__
         ).inc()
-        logger.error(f"[Parallel] 콘테스트 평가 중 오류 발생: {str(e)}")
+        logger.error(f"[Queue] 콘테스트 평가 중 오류 발생: {str(e)}")
         raise e
