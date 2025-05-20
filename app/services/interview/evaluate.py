@@ -183,7 +183,7 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         # 워커 시작
         worker_task = asyncio.create_task(evaluation_queue.start_workers(db))
         
-        # 모든 평가 작업을 큐에 추가
+        # 모든 평가 작업을 큐에 추가 (await 없이)
         for problem in problems:
             for answer in problem['answers']:
                 task = {
@@ -193,7 +193,7 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
                     'ai_answer': problem['ai_answer'],
                     'participant_answer': answer['answer']
                 }
-                await evaluation_queue.add_task(task)
+                evaluation_queue.add_task(task)
         
         # 모든 작업이 완료될 때까지 대기
         await worker_task

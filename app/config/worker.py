@@ -72,9 +72,12 @@ class EvaluationQueue:
         self.num_workers = num_workers
         self.results = []
         self.is_processing = False
+        self.tasks_added = 0
+        self.tasks_completed = 0
 
-    async def add_task(self, task: Dict[str, Any]):
-        await self.queue.put(task)
+    def add_task(self, task: Dict[str, Any]):
+        self.tasks_added += 1
+        self.queue.put_nowait(task)
 
     async def start_workers(self, db: Session):
         self.is_processing = True
@@ -85,8 +88,10 @@ class EvaluationQueue:
             self._worker_loop(worker) for worker in self.workers
         ]
         
-        # 모든 워커가 완료될 때까지 대기
-        await asyncio.gather(*worker_tasks)
+        # 모든 작업이 완료될 때까지 대기
+        while self.tasks_completed < self.tasks_added:
+            await asyncio.sleep(0.1)
+        
         self.is_processing = False
 
     async def _worker_loop(self, worker: EvaluationWorker):
@@ -98,6 +103,7 @@ class EvaluationQueue:
                 # 작업 처리
                 result = await worker.process_evaluation(task)
                 self.results.append(result)
+                self.tasks_completed += 1
                 
                 # 작업 완료 표시
                 self.queue.task_done()
@@ -106,6 +112,7 @@ class EvaluationQueue:
                 break
             except Exception as e:
                 logger.error(f"워커 {worker.worker_id} 오류: {str(e)}")
+                self.tasks_completed += 1
                 continue
 
     def get_results(self) -> List[Dict[str, Any]]:
