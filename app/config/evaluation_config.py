@@ -1,0 +1,10 @@
+from app.db.mysql.connection import DB_CONFIG
+
+EVALUATION_CONFIG = {
+    "CONCURRENT_LIMIT": DB_CONFIG['CONCURRENT_LIMIT'],
+    "BATCH_SIZE": DB_CONFIG['BATCH_SIZE'],
+    "MAX_RETRIES": DB_CONFIG['MAX_RETRIES'],
+    "LOG_INTERVAL": 10,
+    "RETRY_BASE_DELAY": 2,
+    "METRIC_PREFIX": "advanced_parallel"
+}

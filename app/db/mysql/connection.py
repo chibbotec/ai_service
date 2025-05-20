@@ -8,6 +8,14 @@ from mysql.connector import Error
 # 환경 변수 로드
 load_dotenv(verbose=True)
 
+# 전역 설정
+DB_CONFIG = {
+    "POOL_SIZE": int(os.getenv('MYSQL_POOL_SIZE', 10)),
+    "CONCURRENT_LIMIT": int(os.getenv('CONCURRENT_LIMIT', 10)),
+    "BATCH_SIZE": int(os.getenv('BATCH_SIZE', 20)),
+    "MAX_RETRIES": int(os.getenv('MAX_RETRIES', 2))
+}
+
 class MySQLConnection:
     _instance = None
     _pool = None
@@ -32,12 +40,13 @@ class MySQLConnection:
             print(f"MySQL Host: {dbconfig['host']}")
             print(f"MySQL Port: {dbconfig['port']}")
             print(f"MySQL Database: {dbconfig['database']}")
+            print(f"Pool Size: {DB_CONFIG['POOL_SIZE']}")
             print("=====================")
 
             try:
                 self._pool = MySQLConnectionPool(
                     pool_name="mypool",
-                    pool_size=10,
+                    pool_size=DB_CONFIG['POOL_SIZE'],
                     **dbconfig
                 )
                 print("MySQL 연결 풀 생성 완료!")
