@@ -123,7 +123,6 @@ class ServiceManager:
             return
         
         # Dramatiq 워커 실행 (기존 컨테이너에서)
-        os.system(f"docker exec -d {self.next_name} bash -c 'PYTHONPATH=/app dramatiq app.workers.evaluation_worker --processes 4 --threads 4 --no-prometheus'")
         print(f"Dramatiq 워커 실행 완료: {self.next_name}")
         
         self._switch_port()
