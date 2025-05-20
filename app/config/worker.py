@@ -74,6 +74,7 @@ class EvaluationQueue:
         self.is_processing = False
         self.tasks_added = 0
         self.tasks_completed = 0
+        self.worker_tasks = []
 
     def add_task(self, task: Dict[str, Any]):
         self.tasks_added += 1
@@ -84,17 +85,31 @@ class EvaluationQueue:
         self.workers = [EvaluationWorker(i, db) for i in range(self.num_workers)]
         
         # 워커 시작
-        worker_tasks = [
-            self._worker_loop(worker) for worker in self.workers
+        self.worker_tasks = [
+            asyncio.create_task(self._worker_loop(worker)) 
+            for worker in self.workers
         ]
+        
+        logger.info(f"[Queue] {self.num_workers}개의 워커 시작됨")
         
         # 모든 작업이 완료될 때까지 대기
         while self.tasks_completed < self.tasks_added:
             await asyncio.sleep(0.1)
         
+        # 워커 태스크 종료
+        for task in self.worker_tasks:
+            task.cancel()
+        
+        try:
+            await asyncio.gather(*self.worker_tasks, return_exceptions=True)
+        except asyncio.CancelledError:
+            pass
+        
         self.is_processing = False
+        logger.info("[Queue] 모든 워커 종료됨")
 
     async def _worker_loop(self, worker: EvaluationWorker):
+        logger.info(f"[Worker {worker.worker_id}] 시작됨")
         while self.is_processing:
             try:
                 # 큐에서 작업 가져오기 (작업이 없으면 대기)
@@ -109,9 +124,10 @@ class EvaluationQueue:
                 self.queue.task_done()
                 
             except asyncio.CancelledError:
+                logger.info(f"[Worker {worker.worker_id}] 종료됨")
                 break
             except Exception as e:
-                logger.error(f"워커 {worker.worker_id} 오류: {str(e)}")
+                logger.error(f"[Worker {worker.worker_id}] 오류: {str(e)}")
                 self.tasks_completed += 1
                 continue
 
