@@ -47,7 +47,3 @@ llm = ChatOpenAI(
 
 # 체인 구성
 chain = prompt | llm | parser
-
-def get_portfolio_chain():
-    """포트폴리오 생성 체인을 반환합니다."""
-    return chain

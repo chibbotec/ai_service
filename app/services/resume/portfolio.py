@@ -6,7 +6,7 @@ from typing import Dict, Any, Union
 from app.schemas.resume import PortfolioData, SystemArchitecture
 from dotenv import load_dotenv
 from app.utils.progress_tracker import ProgressTracker, ProgressStatus
-from app.chain.portfolio_chain import get_portfolio_chain
+from app.chain import portfolio_chain
 
 # 환경변수 로드
 load_dotenv()
@@ -92,8 +92,7 @@ async def generate_portfolio(user_id: str, repositories: list) -> Union[Portfoli
         
         # LangChain 체인으로 포트폴리오 생성
         try:
-            chain = get_portfolio_chain()
-            response = chain.invoke({"source_code": source_code_text})
+            response = portfolio_chain.invoke({"source_code": source_code_text})
             processing_time = time.time() - start_time
             print(f"포트폴리오 생성 시간: {processing_time:.2f}초")
             

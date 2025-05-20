@@ -31,5 +31,5 @@ prompt = PromptTemplate(
     partial_variables={"format_instructions": parser.get_format_instructions()}
 )
 
-llm = ChatOpenAI(temperature=0.2, model_name="gpt-4")
+llm = ChatOpenAI(temperature=0.2, model_name="gpt-4.1")
 chain = prompt | llm | parser 
