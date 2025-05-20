@@ -164,12 +164,15 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
     try:
         start_time = time.time()
         problems = await get_problems_data(db, contest_id)
+        total_answers = sum(len(p['answers']) for p in problems)
+        
+        logger.info(f"[Parallel] 평가 시작 - 총 {len(problems)}개 문제, {total_answers}개 답변")
         
         # 컴포넌트 초기화
         sem = asyncio.Semaphore(EVALUATION_CONFIG['CONCURRENT_LIMIT'])
         batch_processor = BatchProcessor(db, EVALUATION_CONFIG['BATCH_SIZE'])
         progress_tracker = ProgressTracker(
-            total=sum(len(p['answers']) for p in problems),
+            total=total_answers,
             log_interval=EVALUATION_CONFIG['LOG_INTERVAL']
         )
         evaluation_task = EvaluationTask(sem, batch_processor, progress_tracker)
@@ -193,12 +196,25 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
         await batch_processor.process_batch()  # 남은 배치 처리
         
         successful_evaluations = [r for r in results if r['status'] == 'success']
+        failed_evaluations = len(results) - len(successful_evaluations)
         
         # 메트릭 업데이트
         duration = time.time() - start_time
         EVALUATION_DURATION.labels(method="parallel").observe(duration)
         EVALUATION_COUNTER.labels(method="parallel", status="success").inc(len(successful_evaluations))
-        EVALUATION_COUNTER.labels(method="parallel", status="error").inc(len(results) - len(successful_evaluations))
+        EVALUATION_COUNTER.labels(method="parallel", status="error").inc(failed_evaluations)
+        
+        # 성능 메트릭 계산
+        success_rate = (len(successful_evaluations) / total_answers) * 100 if total_answers > 0 else 0
+        throughput = total_answers / duration if duration > 0 else 0
+        
+        logger.info(
+            f"[Parallel] 평가 완료 - "
+            f"소요시간: {duration:.2f}초, "
+            f"성공: {len(successful_evaluations)}/{total_answers} ({success_rate:.1f}%), "
+            f"실패: {failed_evaluations}, "
+            f"처리량: {throughput:.1f}개/초"
+        )
         
         await update_contest_status(db, contest_id)
         return successful_evaluations
@@ -208,7 +224,7 @@ async def evaluate_contest_answers_parallel(db: Session, contest_id: int) -> Lis
             method="parallel",
             error_type=type(e).__name__
         ).inc()
-        logger.error(f"콘테스트 평가 중 오류 발생: {str(e)}", exc_info=True)
+        logger.error(f"[Parallel] 콘테스트 평가 중 오류 발생: {str(e)}", exc_info=True)
         raise e
 
 async def evaluate_contest_answers_parallel_1(db: Session, contest_id: int) -> List[Dict[str, Any]]:
