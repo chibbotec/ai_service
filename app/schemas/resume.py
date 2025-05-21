@@ -88,12 +88,7 @@ class PortfolioData(BaseModel):
                             "functions": ["회원 등록/수정/삭제", "OAuth2 인증", "반려동물 프로필 관리"]
                         }
                     ],
-                    "tech_stack": {
-                        "백엔드": ["Spring Boot", "Java 11"],
-                        "데이터베이스": ["PostgreSQL", "PostGIS"],
-                        "메시징": ["Kafka", "Redis"],
-                        "배포": ["Docker", "Kubernetes"]
-                    },
+                    "tech_stack": ["Spring Boot", "Java 11", "PostgreSQL", "PostGIS", "Kafka", "Redis", "Docker", "Kubernetes"],
                     "communication": "API Gateway를 통한 HTTP 라우팅과 Kafka를 활용한 비동기 이벤트 기반 통신을 결합하여 사용합니다.",
                     "deployment": "모든 서비스는 Docker 컨테이너화되어 Kubernetes 클러스터에서 관리됩니다."
                 }
