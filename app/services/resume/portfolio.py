@@ -7,6 +7,7 @@ from app.schemas.resume import PortfolioData, SystemArchitecture
 from dotenv import load_dotenv
 from app.utils.progress_tracker import ProgressTracker, ProgressStatus
 from app.chain import portfolio_chain
+from app.chain import portfolio_role_chain
 
 # 환경변수 로드
 load_dotenv()
@@ -25,15 +26,21 @@ async def get_portfolio_status(user_id: str) -> Dict[str, Any]:
     if progress["completed"] == progress["total"]:
         if progress["failed"] > 0:
             return {"error": "포트폴리오 생성 실패"}
-        return {"status": "completed", "result": progress.get("result")}
+        return {
+            "status": "completed",
+            "result": progress.get("result"),
+            "message": progress.get("message", "포트폴리오 생성이 완료되었습니다.")
+        }
     else:
         return {
             "status": "processing",
             "progress": progress,
+            "current_step": progress.get("current_step", "portfolio_generation"),
+            "message": progress.get("message", "포트폴리오 생성 중입니다."),
             "elapsed_time": time.time() - progress.get("start_time", time.time())
         }
-
-async def generate_portfolio(user_id: str, repositories: list) -> Union[PortfolioData, Dict[str, Any]]:
+    
+async def generate_portfolio(user_id: str, repositories: list, commit_files: list) -> Union[PortfolioData, Dict[str, Any]]:
     start_time = time.time()
     
     try:
@@ -92,25 +99,68 @@ async def generate_portfolio(user_id: str, repositories: list) -> Union[Portfoli
         
         # LangChain 체인으로 포트폴리오 생성
         try:
+            # 포트폴리오 생성 시작 상태 업데이트
+            await tracker.update(ProgressStatus.IN_PROGRESS, {
+                "current_step": "portfolio_generation",
+                "message": "포트폴리오 생성 중입니다."
+            })
+            
             response = portfolio_chain.invoke({"source_code": source_code_text})
             processing_time = time.time() - start_time
             print(f"포트폴리오 생성 시간: {processing_time:.2f}초")
             
-            # 성공 상태 업데이트
-            tracker.progress["result"] = response
-            await tracker.update(ProgressStatus.SUCCESS)
-            return response
-        except Exception as chain_error:
-            error_msg = f"포트폴리오 생성 중 파싱 오류: {str(chain_error)}"
+            # 주요 역할 생성 시작 상태 업데이트
+            await tracker.update(ProgressStatus.IN_PROGRESS, {
+                "current_step": "role_generation",
+                "message": "주요 역할 업데이트 중입니다."
+            })
+
+            # 포트폴리오 주요역할 생성
+            try:
+                role_response = await generate_portfolio_roles(
+                    source_code_text=source_code_text,
+                    commit_files=commit_files
+                )
+                
+                # 결과 구조화
+                structured_response = {
+                    "portfolio": response.model_dump() if isinstance(response, PortfolioData) else response,
+                    "roles": role_response
+                }
+                
+                # 최종 성공 상태 업데이트
+                await tracker.update(ProgressStatus.SUCCESS, {
+                    "current_step": "completed",
+                    "message": "포트폴리오 생성이 완료되었습니다.",
+                    "result": structured_response
+                })
+                
+                return structured_response
+            except Exception as role_error:
+                print(f"주요 역할 생성 중 오류: {str(role_error)}")
+                # 주요 역할 생성 실패는 전체 프로세스를 실패시키지 않음
+                structured_response = {
+                    "portfolio": response.model_dump() if isinstance(response, PortfolioData) else response,
+                    "roles_error": str(role_error)
+                }
+                await tracker.update(ProgressStatus.SUCCESS, {
+                    "current_step": "completed",
+                    "message": "포트폴리오 생성이 완료되었습니다. (주요 역할 생성 실패)",
+                    "result": structured_response
+                })
+                return structured_response
+        except Exception as e:
+            error_msg = f"포트폴리오 생성 실패: {str(e)}"
             print(error_msg)
             
             # 실패 상태 업데이트
-            await tracker.update(ProgressStatus.FAILED, {"error": error_msg})
+            if user_id in portfolio_trackers:
+                await portfolio_trackers[user_id].update(ProgressStatus.FAILED, {"error": error_msg})
+            
             return {
-                "error": "포트폴리오 형식 파싱 실패",
-                "details": error_msg
+                "error": error_msg,
+                "processing_time": time.time() - start_time
             }
-        
     except Exception as e:
         error_msg = f"포트폴리오 생성 실패: {str(e)}"
         print(error_msg)
@@ -123,3 +173,15 @@ async def generate_portfolio(user_id: str, repositories: list) -> Union[Portfoli
             "error": error_msg,
             "processing_time": time.time() - start_time
         }
+    
+async def generate_portfolio_roles(source_code_text: str, commit_files: list) -> Dict[str, Any]:
+    try:
+        # LangChain을 사용하여 코드 분석 및 역할 생성
+        roles = portfolio_role_chain.invoke({
+            "source_code": source_code_text,
+            "commit_files": commit_files
+        })
+        
+        return roles
+    except Exception as e:
+        raise Exception(f"주요 역할 생성 실패: {str(e)}")

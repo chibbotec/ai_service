@@ -47,6 +47,10 @@ class ProgressTracker:
                 self.progress["in_progress"] += 1
                 self.progress["completed"] -= 1  # 완료 카운트는 증가하지 않음
             
+            # metadata를 progress 딕셔너리에 저장
+            if metadata:
+                self.progress.update(metadata)
+            
             percent = (self.progress["completed"] / self.progress["total"]) * 100
             if percent % self.log_interval < 0.5 and percent > 0:
                 self._log_progress(metadata)

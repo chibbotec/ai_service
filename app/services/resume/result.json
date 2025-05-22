@@ -1,0 +1,20 @@
+[
+{
+    "status": "processing",
+    "current_step": "portfolio_generation",
+    "message": "포트폴리오 생성 중입니다."
+}
+,
+{
+    "status": "processing",
+    "current_step": "role_generation",
+    "message": "주요 역할 업데이트 중입니다."
+}
+,
+{
+    "status": "completed",
+    "message": "포트폴리오 생성이 완료되었습니다.",
+    "result": "{ ... }"
+}
+]
+

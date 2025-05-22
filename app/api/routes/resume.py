@@ -14,7 +14,7 @@ async def create_portfolio(space_id: str, user_id: str, request: PortfolioReques
         print(f"포트폴리오 생성 요청: 사용자 ID={user_id}")
         
         # 백그라운드 작업으로 포트폴리오 생성 시작
-        background_tasks.add_task(generate_portfolio, user_id, request.repositories)
+        background_tasks.add_task(generate_portfolio, user_id, request.repositories, request.commitFiles)
         
         # 즉시 응답 반환
         return JSONResponse(

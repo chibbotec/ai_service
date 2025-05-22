@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 class ResumeBase(BaseModel):
     content: str
@@ -17,8 +17,13 @@ class ResumeResponse(ResumeBase):
         from_attributes = True
 
 # 포트폴리오 요청 스키마
+class CommitFile(BaseModel):
+    repository: str
+    commitFiles: List[str]
+
 class PortfolioRequest(BaseModel):
     repositories: List[str]
+    commitFiles: List[CommitFile]
 
 # 기능 설명 스키마
 class FeatureDetail(BaseModel):
@@ -27,7 +32,7 @@ class FeatureDetail(BaseModel):
 # 아키텍처 컴포넌트 스키마
 class ServiceComponent(BaseModel):
     name: str = Field(description="서비스 이름")
-    port: int = Field(description="서비스 포트")
+    port: Optional[int] = Field(description="서비스 포트", default=None)
     description: str = Field(description="서비스 설명")
     functions: List[str] = Field(description="주요 기능 목록")
 
@@ -46,7 +51,7 @@ class PortfolioData(BaseModel):
     overview: str = Field(description="프로젝트 개요 (최대 300단어)")
     tech_stack: List[str] = Field(description="사용된 기술 스택")
     features: Dict[str, List[str]] = Field(description="주요 기능 및 설명")
-    architecture: SystemArchitecture = Field(description="시스템 아키텍처 상세 정보")
+    architecture: Optional[SystemArchitecture] = Field(description="시스템 아키텍처 상세 정보", default=None)
 
     class Config:
         schema_extra = {
@@ -99,4 +104,24 @@ class PortfolioResponse(BaseModel):
     summary: str
     overview: str
     features: list[str]
-    architecture: str 
+    architecture: str
+
+class PortfolioRole(BaseModel):
+    """개발자의 프로젝트 역할과 기여도 정보"""
+    roles: List[str] = Field(description="주요 역할 및 성과 목록 (예: 'MSA를 사용해서 서버 구축하여 10개의 서비스 연결 및 안정적인 운영')")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "roles": [
+                    "Terraform을 사용해서 클라우드 인프라 프로비저닝 자동화하여 배포 시간 80% 단축",
+                    "GitAction을 사용해서 무중단 배포 파이프라인 구축하여 서비스 다운타임 제로 달성",
+                    "API Gateway를 사용해서 서비스 간 연결 아키텍처 설계하여 API 평균 응답시간 58ms 단축",
+                    "AI 기술을 사용해서 강아지 얼굴 판별 및 유사도 비교 서버 구축하여 이미지 처리 시간 10초 단축",
+                    "MSA 아키텍처를 사용해서 서비스 설계 및 구현하여 시스템 확장성 200% 향상",
+                    "클라우드 기술을 사용해서 인프라 자동화하여 운영 비용 40% 절감",
+                    "CI/CD 도구를 사용해서 배포 파이프라인 구축하여 배포 시간 90% 단축",
+                    "Kafka, RestAPI을 사용해서 서비스 연동 구현하여 10개의 서비스 안정적 운영"
+                ]
+            }
+        } 

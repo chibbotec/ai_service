@@ -20,6 +20,7 @@ template = """
 1. 프로젝트 요약은 간결하고 명확하게 작성해 주세요 (최대 100단어).
 2. 프로젝트 개요에는 목적과 문제 해결 방식을 자세히 설명해 주세요 (최대 300단어).
 3. 사용된 기술 스택을 모두 리스트로 나열해 주세요.
+   예시: ["Spring Boot", "PostgreSQL", "Kafka", "Meilisearch", "WebSocket", "AWS S3", "Docker"]
 4. 주요 기능은 도메인별로 그룹화하여 작성하고, 각 기능에 대한 자세한 설명을 포함해주세요.
    예시 형식: {{"기능명": ["설명1", "설명2", ...]}}
 5. 시스템 아키텍처는 다음 구성요소를 포함해 주세요:
@@ -41,7 +42,7 @@ prompt = PromptTemplate(
 llm = ChatOpenAI(
     temperature=0.3, 
     model_name="gpt-4.1-nano",  # 더 큰 컨텍스트를 지원하는 모델로 변경
-    max_tokens=4096,  # 출력 토큰 수 제한
+    max_tokens=32768,  # 출력 토큰 수 제한
     request_timeout=300  # 타임아웃 시간 증가
 )
 
