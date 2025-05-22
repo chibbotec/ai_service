@@ -23,7 +23,8 @@ async def get_portfolio_status(user_id: str) -> Dict[str, Any]:
     tracker = portfolio_trackers[user_id]
     progress = tracker.get_progress()
     
-    if progress["completed"] == progress["total"]:
+    # 완료 조건 수정: success가 1 이상이거나 result가 있으면 완료로 처리
+    if progress.get("success", 0) > 0 or progress.get("result"):
         if progress["failed"] > 0:
             return {"error": "포트폴리오 생성 실패"}
         return {

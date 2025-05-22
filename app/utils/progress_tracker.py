@@ -40,12 +40,15 @@ class ProgressTracker:
             metadata: 추가 메타데이터 (선택사항)
         """
         async with self.lock:
-            self.progress["completed"] += 1
-            self.progress[status.value] += 1
-            
             if status == ProgressStatus.IN_PROGRESS:
+                # IN_PROGRESS 상태일 때는 completed를 증가시키지 않고 in_progress만 증가
                 self.progress["in_progress"] += 1
-                self.progress["completed"] -= 1  # 완료 카운트는 증가하지 않음
+            else:
+                # 다른 상태일 때는 completed를 증가시키고, 이전에 IN_PROGRESS였다면 감소
+                if self.progress["in_progress"] > 0:
+                    self.progress["in_progress"] -= 1
+                self.progress["completed"] += 1
+                self.progress[status.value] += 1
             
             # metadata를 progress 딕셔너리에 저장
             if metadata:
