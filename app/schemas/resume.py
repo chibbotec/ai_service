@@ -124,4 +124,43 @@ class PortfolioRole(BaseModel):
                     "Kafka, RestAPI을 사용해서 서비스 연동 구현하여 10개의 서비스 안정적 운영"
                 ]
             }
-        } 
+        }
+
+class Project(BaseModel):
+    """프로젝트 정보"""
+    name: str = Field(description="프로젝트 이름")
+    techStack: List[str] = Field(description="사용된 기술 스택", default_factory=list)
+    role: str = Field(description="프로젝트에서의 역할")
+
+class Career(BaseModel):
+    """경력 정보"""
+    position: str = Field(description="직무/포지션")
+    achievement: str = Field(description="주요 성과")
+
+class ResumeSummaryRequest(BaseModel):
+    """이력서 요약 요청 스키마"""
+    position: str = Field(description="지원 포지션")
+    projects: List[Project] = Field(description="프로젝트 목록", default_factory=list)
+    careers: List[Career] = Field(description="경력 목록", default_factory=list)
+
+class ResumeSummary(BaseModel):
+    """이력서 요약 응답 스키마"""
+    techStack: List[str] = Field(description="추천 기술 스택 목록")
+    techSummary: List[str] = Field(description="기술 스택 요약 설명")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "techStack": ["Spring Boot", "PostgreSQL", "Kafka", "Meilisearch", "WebSocket", "AWS S3", "Docker"],
+                "techSummary": [
+                    "Terraform을 사용해서 클라우드 인프라 프로비저닝 자동화하여 배포 시간 80% 단축",
+                    "GitAction을 사용해서 무중단 배포 파이프라인 구축하여 서비스 다운타임 제로 달성",
+                    "API Gateway를 사용해서 서비스 간 연결 아키텍처 설계하여 API 평균 응답시간 58ms 단축",
+                    "AI 기술을 사용해서 강아지 얼굴 판별 및 유사도 비교 서버 구축하여 이미지 처리 시간 10초 단축",
+                    "MSA 아키텍처를 사용해서 서비스 설계 및 구현하여 시스템 확장성 200% 향상",
+                    "클라우드 기술을 사용해서 인프라 자동화하여 운영 비용 40% 절감",
+                    "CI/CD 도구를 사용해서 배포 파이프라인 구축하여 배포 시간 90% 단축",
+                    "Kafka, RestAPI을 사용해서 서비스 연동 구현하여 10개의 서비스 안정적 운영"
+                ]
+            }
+        }

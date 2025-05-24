@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from app.schemas.resume import PortfolioRequest
-from app.services.resume import generate_portfolio, get_portfolio_status
+from app.schemas.resume import PortfolioRequest, ResumeSummaryRequest, ResumeSummary
+from app.services.resume import generate_portfolio, get_portfolio_status, generate_resume_summary
 from fastapi.responses import JSONResponse
 
 router = APIRouter(
@@ -36,3 +36,14 @@ async def check_portfolio_status(space_id: str, user_id: str):
             raise HTTPException(status_code=404, detail=status["error"])
         raise HTTPException(status_code=500, detail=status["error"])
     return status
+
+@router.post("/{space_id}/resume/{user_id}/summary", response_model=ResumeSummary)
+async def create_resume_summary(space_id: str, user_id: str, request: ResumeSummaryRequest):
+    try:
+        print(f"이력서 요약 생성 요청: 사용자 ID={user_id}")
+        
+        # 이력서 요약 생성
+        result = await generate_resume_summary(request)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이력서 요약 생성 처리 오류: {str(e)}")
