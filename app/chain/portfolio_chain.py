@@ -23,10 +23,11 @@ template = """
    예시: ["Spring Boot", "PostgreSQL", "Kafka", "Meilisearch", "WebSocket", "AWS S3", "Docker"]
 4. 주요 기능은 도메인별로 그룹화하여 작성하고, 각 기능에 대한 자세한 설명을 포함해주세요.
    예시 형식: {{"기능명": ["설명1", "설명2", ...]}}
+   주의: 각 기능의 설명은 반드시 문자열 리스트 형태여야 합니다.
 5. 시스템 아키텍처는 다음 구성요소를 포함해 주세요:
    - overview: 전체 아키텍처 개요
    - components: 각 서비스 구성요소와 포트, 설명, 주요 기능
-   - tech_stack: 기술 스택을 카테고리별로 분류
+   - tech_stack: 기술 스택을 카테고리별로 분류 (반드시 포함)
    - communication: 서비스 간 통신 방식
    - deployment: 배포 구성 방식
 """
