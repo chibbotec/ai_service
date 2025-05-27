@@ -15,3 +15,5 @@ dramatiq
 psutil
 redis
 prometheus-client
+beautifulsoup4
+requests

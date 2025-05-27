@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from app.schemas.resume import PortfolioRequest, ResumeSummaryRequest, ResumeSummary
+from app.schemas.resume import PortfolioRequest, ResumeSummaryRequest, ResumeSummary, JobDescriptionRequest
 from app.services.resume import generate_portfolio, get_portfolio_status, generate_resume_summary
+from app.crawler.main_crawler import crawl_url
+from app.services.resume.job_description import analyze_job_description
 from fastapi.responses import JSONResponse
 
 router = APIRouter(
@@ -47,3 +49,32 @@ async def create_resume_summary(space_id: str, user_id: str, request: ResumeSumm
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"이력서 요약 생성 처리 오류: {str(e)}")
+
+@router.post("/{space_id}/resume/job-description")
+async def create_job_description(space_id: str, request: JobDescriptionRequest):
+    try:
+        print(f"채용공고 크롤링 요청: URL={request.url}")
+        
+        # 크롤러 호출
+        result = crawl_url(request.url)
+        
+        if not result:
+            raise HTTPException(status_code=400, detail="URL 크롤링에 실패했습니다.")
+            
+        if result['status'] == 'error':
+            raise HTTPException(status_code=400, detail=result['message'])
+        
+        # 채용공고 분석
+        analysis_result = await analyze_job_description(result['raw_data'])
+        
+        return {
+            "status": "success",
+            "site": result['site'],
+            "url": result['url'],
+            "analysis": analysis_result
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"채용공고 크롤링 처리 오류: {str(e)}")
