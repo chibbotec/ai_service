@@ -170,12 +170,14 @@ class JobDescriptionRequest(BaseModel):
     url: str = Field(description="채용 공고 URL")
 
 class JobAnalysis(BaseModel):
-    company: str
-    position: str
-    career: str
-    mainTasks: List[str]
-    requirements: List[str]
-    resumeRequirements: List[str]
+    company: str = Field(description="회사명")
+    position: str = Field(description="직무/포지션")
+    mainTasks: List[str] = Field(description="주요 업무 목록")
+    requirements: List[str] = Field(description="자격 요건 및 우대 사항 목록")
+    career: str = Field(description="경력 요구사항")
+    resumeRequirements: List[str] = Field(description="이력서 요구사항 목록")
+    recruitmentProcess: List[str] = Field(description="채용 절차 목록")
+    additionalInfo: List[str] = Field(description="추가 정보 목록")
 
 class AiAnalysisResponse(BaseModel):
     analysis: JobAnalysis
