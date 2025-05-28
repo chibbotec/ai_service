@@ -312,7 +312,7 @@ class CustomResumeRequest(BaseModel):
     jobDescription: Optional[JobAnalysis]
     selectedResume: Optional[ResumeDetail]
     selectedPortfolio: Optional[List[Dict[str, Any]]]
-    additionalInfo: Optional[str]
+    additionalInfo: Optional[List[str]]
 
 class CoverLetterSection(BaseModel):
     title: str
