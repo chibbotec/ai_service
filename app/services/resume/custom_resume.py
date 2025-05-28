@@ -220,7 +220,7 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
         
         # ProgressTracker 초기화
         tracker = ProgressTracker(
-            total=4,  # 총 4단계: start, tech_stack, cover_letter, completed
+            total=3, 
             log_interval=10,
             log_prefix="Custom Resume Generation"
         )
@@ -247,6 +247,7 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
                     response_position = request.jobDescription.get("position", "")
 
             logger.info("Generating start response...")
+            
             response_start = await generate_start(
                 processed_data=processed_data,
                 tracker=tracker,
@@ -272,7 +273,7 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
                 "position": response_position,
                 "tech_stack": {
                     "tech_stack": response_tech_stack.tech_stack,
-                    "tech_capabilities": response_tech_stack.tech_capabilities
+                    "tech_summary": response_tech_stack.tech_summary
                 },
                 "cover_letter": {
                     "coverLetter": [

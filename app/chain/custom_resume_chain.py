@@ -58,7 +58,7 @@ memory_manager = MemoryManager()
 class TechStackAnalysis(BaseModel):
     """기술 스택 분석 결과"""
     tech_stack: List[str] = Field(description="지원자의 주요 기술 스택 목록")
-    tech_capabilities: List[str] = Field(description="지원자의 주요 기술 역량 요약")
+    tech_summary: List[str] = Field(description="지원자의 주요 기술 역량 요약")
 
 class CoverLetterSection(BaseModel):
     """자기소개서 섹션"""
@@ -85,7 +85,7 @@ async def generate_start(processed_data: Dict[str, Any], tracker: ProgressTracke
         # 입력 데이터 검증
         validate_processed_data(processed_data, ["job_description"])
         
-        llm = ChatOpenAI(temperature=0.7)
+        llm = ChatOpenAI(temperature=0.2, model_name="gpt-4.1")
         memory = memory_manager.get_memory(user_id)
         
         prompt = PromptTemplate(
@@ -124,12 +124,13 @@ async def generate_tech_stack(processed_data: Dict[str, Any], tracker: ProgressT
     try:
         validate_processed_data(processed_data, ["job_description"])
         
-        llm = ChatOpenAI(temperature=0.7)
+        llm = ChatOpenAI(temperature=0.2, model_name="gpt-4.1")
         parser = PydanticOutputParser(pydantic_object=TechStackAnalysis)
         
         prompt = PromptTemplate.from_template("""당신은 {job_description}의 채용 담당자입니다.
 지원자의 이력서와 포트폴리오를 검토한 결과를 바탕으로, 
-채용 담당자가 중요하게 생각하는 기술 스택과 역량을 요약해주세요.
+채용 담당자가 중요하게 생각하는 기술 스택과 한국말로 역량을 정리해주세요. 
+채용 담당자가 중요하게 생각 하는 순으로 내림 차순으로 만들어 주세요.
 
 이력서 정보:
 {resume_info}
@@ -191,7 +192,7 @@ async def generate_coverletter(processed_data: Dict[str, Any], tracker: Progress
                 chat_history = "\n".join(history_parts)
         
         prompt = PromptTemplate.from_template("""당신은 {job_description}의 채용 담당자입니다.
-이전 대화 내용을 기억하면서, 지원자의 추가 정보와 채용 공고의 요구사항을 종합하여
+이전 대화 내용을 기억하면서, {job_description}의 이력서 요구사항과 지원자의 추가 정보를 종합하여
 자기소개서를 작성해주세요. 이전 대화에서 언급된 지원자의 강점과 경험을 최대한 활용하세요.
 
 추가 정보:

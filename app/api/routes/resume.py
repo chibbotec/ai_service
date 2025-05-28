@@ -3,8 +3,9 @@ from app.schemas.resume import PortfolioRequest, ResumeSummaryRequest, ResumeSum
 from app.services.resume import generate_portfolio, get_portfolio_status, generate_resume_summary
 from app.services.resume.job_description import analyze_job_description
 from app.crawler.main_crawler import crawl_url
-from app.services.resume.custom_resume import generate_custom_resume, get_custom_resume_status
+from app.services.resume.custom_resume import generate_custom_resume, get_custom_resume_status, custom_resume_trackers
 from fastapi.responses import JSONResponse
+from app.utils.progress_tracker import ProgressTracker
 import logging
 
 logger = logging.getLogger(__name__)
@@ -84,9 +85,9 @@ async def create_job_description(space_id: str, request: JobDescriptionRequest):
         raise HTTPException(status_code=500, detail=f"채용공고 크롤링 처리 오류: {str(e)}")
     
 @router.post("/{space_id}/resume/{user_id}/custom-resume")
-async def create_custom_resume(space_id: str, user_id: str, request: CustomResumeRequest):
+async def create_custom_resume(space_id: str, user_id: str, request: CustomResumeRequest, background_tasks: BackgroundTasks):
     try:
-        logger.info(f"커스텀 이력서 생성 요청: 사용자 ID={user_id}, 타입={request.type}")
+        logger.info(f"커스텀 이력서 생성 요청: 사용자 ID={user_id}")
         
         # 요청 데이터 검증
         if not request.jobDescription:
@@ -98,14 +99,26 @@ async def create_custom_resume(space_id: str, user_id: str, request: CustomResum
         if request.type == "portfolio" and not request.selectedPortfolio:
             raise HTTPException(status_code=400, detail="포트폴리오 정보가 필요합니다.")
         
-        # 커스텀 이력서 생성
-        result = await generate_custom_resume(user_id, request)
+        # ProgressTracker 초기화
+        tracker = ProgressTracker(
+            total=3,
+            log_interval=10,
+            log_prefix="Custom Resume Generation"
+        )
+        custom_resume_trackers[user_id] = tracker
         
-        # 에러가 있는 경우 HTTP 예외로 변환
-        if isinstance(result, dict) and "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
-            
-        return result
+        # 백그라운드 작업으로 커스텀 이력서 생성 시작
+        background_tasks.add_task(generate_custom_resume, user_id, request)
+        
+        # 즉시 응답 반환
+        return JSONResponse(
+            status_code=202,
+            content={
+                "message": "커스텀 이력서 생성이 시작되었습니다.",
+                "status": "processing",
+                "user_id": user_id
+            }
+        )
         
     except HTTPException:
         raise
