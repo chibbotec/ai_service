@@ -37,7 +37,8 @@ async def analyze_job_description(raw_data: str) -> AiAnalysisResponse:
             requirements=["자격 요건을 찾을 수 없습니다."],
             career="경력 요구사항을 찾을 수 없습니다.",
             resumeRequirements=["이력서", "자기소개서"],
-            recruitmentProcess=["서류 전형", "1차 면접", "2차 면접", "최종 면접"]
+            recruitmentProcess=["서류 전형", "1차 면접", "2차 면접", "최종 면접"],
+            additionalInfo=["추가 정보를 찾을 수 없습니다."]
         )
         return AiAnalysisResponse(analysis=default_analysis)
 

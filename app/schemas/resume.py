@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from datetime import date, datetime
 
 class ResumeBase(BaseModel):
     content: str
@@ -169,13 +170,159 @@ class JobDescriptionRequest(BaseModel):
     url: str = Field(description="채용 공고 URL")
 
 class JobAnalysis(BaseModel):
-    company: str = Field(description="회사명")
-    position: str = Field(description="직무/포지션")
-    mainTasks: List[str] = Field(description="주요 업무 목록")
-    requirements: List[str] = Field(description="자격 요건 및 우대 사항 목록")
-    career: str = Field(description="경력 요구사항")
-    resumeRequirements: List[str] = Field(description="이력서 요구사항 목록")
-    recruitmentProcess: List[str] = Field(description="채용 절차 목록")
+    company: str
+    position: str
+    career: str
+    mainTasks: List[str]
+    requirements: List[str]
+    resumeRequirements: List[str]
 
 class AiAnalysisResponse(BaseModel):
     analysis: JobAnalysis
+
+class Author(BaseModel):
+    id: int
+    nickname: str
+
+class Link(BaseModel):
+    type: str
+    url: str
+
+class ResumeCareer(BaseModel):
+    period: str
+    company: str
+    position: str
+    isCurrent: bool
+    startDate: date
+    endDate: Optional[date] = None
+    description: str
+    achievement: str
+
+class ResumeProject(BaseModel):
+    name: str
+    description: str
+    techStack: List[str]
+    role: str
+    startDate: date
+    endDate: Optional[date] = None
+    memberCount: Optional[int] = None
+    memberRoles: Optional[str] = None
+    githubLink: Optional[str] = None
+    deployLink: Optional[str] = None
+
+class Education(BaseModel):
+    school: str
+    major: str
+    startDate: date
+    endDate: Optional[date] = None
+    degree: str
+    note: Optional[str] = None
+
+class Certificate(BaseModel):
+    type: str
+    name: str
+    date: date
+    organization: str
+
+class CoverLetter(BaseModel):
+    title: str
+    content: str
+
+class ResumeDetail(BaseModel):
+    id: str
+    spaceId: int
+    author: Author
+    createdAt: datetime
+    updatedAt: datetime
+    title: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    careerType: Optional[str] = None
+    position: Optional[str] = None
+    techStack: Optional[List[str]] = None
+    techSummary: Optional[str] = None
+    links: Optional[List[Link]] = None
+    careers: Optional[List[ResumeCareer]] = None
+    projects: Optional[List[ResumeProject]] = None
+    educations: Optional[List[Education]] = None
+    certificates: Optional[List[Certificate]] = None
+    coverLetters: Optional[List[CoverLetter]] = None
+
+    class Config:
+        from_attributes = True
+
+class PortfolioDuration(BaseModel):
+    startDate: datetime
+    endDate: datetime
+
+class PortfolioArchitecture(BaseModel):
+    communication: str
+    deployment: str
+
+class PortfolioContents(BaseModel):
+    techStack: str
+    summary: str
+    description: str
+    roles: List[str]
+    features: Dict[str, List[str]]
+    architecture: PortfolioArchitecture
+
+class GitHubRepo(BaseModel):
+    name: str
+    url: str
+    description: str
+    language: str
+    lineCount: int
+    byteSize: int
+    selectedDirectories: List[str]
+
+class SavedFile(BaseModel):
+    id: str
+    name: str
+    path: str
+    repository: str
+    savedPath: str
+
+class PortfolioDetail(BaseModel):
+    id: str
+    spaceId: int
+    title: str
+    author: Author
+    duration: PortfolioDuration
+    githubLink: Optional[str] = None
+    deployLink: Optional[str] = None
+    memberCount: Optional[int] = None
+    memberRoles: Optional[str] = None
+    contents: PortfolioContents
+    thumbnailUrl: Optional[str] = None
+    publicAccess: bool
+    githubRepos: Optional[List[GitHubRepo]] = None
+    savedFiles: Optional[List[SavedFile]] = None
+    createdAt: datetime
+    updatedAt: datetime
+
+    class Config:
+        from_attributes = True
+
+class CustomResumeRequest(BaseModel):
+    type: str
+    jobDescription: Optional[JobAnalysis]
+    selectedResume: Optional[ResumeDetail]
+    selectedPortfolio: Optional[List[Dict[str, Any]]]
+    additionalInfo: Optional[str]
+
+class CoverLetterSection(BaseModel):
+    title: str
+    content: str
+
+class TechStackAnalysis(BaseModel):
+    tech_stack: List[str]
+    tech_capabilities: List[str]
+
+class CustomResumeResponse(BaseModel):
+    status: str
+    result: Dict[str, Any]
+    message: str
+
+    

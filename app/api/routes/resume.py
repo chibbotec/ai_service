@@ -1,9 +1,13 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from app.schemas.resume import PortfolioRequest, ResumeSummaryRequest, ResumeSummary, JobDescriptionRequest
+from app.schemas.resume import PortfolioRequest, ResumeSummaryRequest, ResumeSummary, JobDescriptionRequest, CustomResumeRequest
 from app.services.resume import generate_portfolio, get_portfolio_status, generate_resume_summary
-from app.crawler.main_crawler import crawl_url
 from app.services.resume.job_description import analyze_job_description
+from app.crawler.main_crawler import crawl_url
+from app.services.resume.custom_resume import generate_custom_resume, get_custom_resume_status
 from fastapi.responses import JSONResponse
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/ai",
@@ -78,3 +82,48 @@ async def create_job_description(space_id: str, request: JobDescriptionRequest):
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"채용공고 크롤링 처리 오류: {str(e)}")
+    
+@router.post("/{space_id}/resume/{user_id}/custom-resume")
+async def create_custom_resume(space_id: str, user_id: str, request: CustomResumeRequest):
+    try:
+        logger.info(f"커스텀 이력서 생성 요청: 사용자 ID={user_id}, 타입={request.type}")
+        
+        # 요청 데이터 검증
+        if not request.jobDescription:
+            raise HTTPException(status_code=400, detail="채용 공고 정보가 필요합니다.")
+        
+        if request.type == "resume" and not request.selectedResume:
+            raise HTTPException(status_code=400, detail="이력서 정보가 필요합니다.")
+        
+        if request.type == "portfolio" and not request.selectedPortfolio:
+            raise HTTPException(status_code=400, detail="포트폴리오 정보가 필요합니다.")
+        
+        # 커스텀 이력서 생성
+        result = await generate_custom_resume(user_id, request)
+        
+        # 에러가 있는 경우 HTTP 예외로 변환
+        if isinstance(result, dict) and "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+            
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"커스텀 이력서 생성 처리 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"커스텀 이력서 생성 처리 오류: {str(e)}")
+    
+@router.get("/{space_id}/resume/{user_id}/custom-resume-status")
+async def check_custom_resume_status(space_id: str, user_id: str):
+    try:
+        status = await get_custom_resume_status(user_id)
+        if "error" in status:
+            if status["error"] == "커스텀 이력서 생성 요청을 찾을 수 없습니다.":
+                raise HTTPException(status_code=404, detail=status["error"])
+            raise HTTPException(status_code=500, detail=status["error"])
+        return status
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"커스텀 이력서 상태 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"커스텀 이력서 상태 조회 오류: {str(e)}")
