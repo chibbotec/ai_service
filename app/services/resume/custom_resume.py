@@ -186,11 +186,16 @@ def preprocess_request_data(request: CustomResumeRequest) -> Dict[str, Any]:
 
 async def get_custom_resume_status(user_id: str) -> Dict[str, Any]:
     """커스텀 이력서 생성 상태 조회"""
+    logger.info(f"Checking custom resume status for user: {user_id}")
+    logger.info(f"Available trackers: {list(custom_resume_trackers.keys())}")
+    
     if user_id not in custom_resume_trackers:
+        logger.error(f"Tracker not found for user: {user_id}")
         return {"error": "커스텀 이력서 생성 요청을 찾을 수 없습니다."}
     
     tracker = custom_resume_trackers[user_id]
     progress = tracker.get_progress()
+    logger.info(f"Progress for user {user_id}: {progress}")
 
     if progress.get("success", 0) > 0 or progress.get("result"):
         if progress["failed"] > 0:
@@ -225,6 +230,8 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
             log_prefix="Custom Resume Generation"
         )
         custom_resume_trackers[user_id] = tracker
+        logger.info(f"Initialized tracker for user: {user_id}")
+        logger.info(f"Current trackers: {list(custom_resume_trackers.keys())}")
 
         try:
             # 데이터 전처리
@@ -286,6 +293,8 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
             }
             
             logger.info("Custom resume generation completed successfully")
+            logger.info(f"Final result for user {user_id}: {result}")
+            
             await tracker.update(
                 status=ProgressStatus.SUCCESS,
                 metadata={
