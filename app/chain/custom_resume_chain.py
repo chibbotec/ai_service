@@ -109,7 +109,16 @@ async def generate_start(processed_data: Dict[str, Any], tracker: ProgressTracke
         })
         
         response = result.get("text", "")
-        await tracker.update(status=ProgressStatus.SUCCESS, metadata={"current_step": "start"})
+        progress = tracker.get_progress()
+        completed_steps = progress.get("completed_steps", [])
+        completed_steps.append("start")
+        await tracker.update(
+            status=ProgressStatus.SUCCESS, 
+            metadata={
+                "current_step": "start",
+                "completed_steps": completed_steps
+            }
+        )
         return response
         
     except Exception as e:
@@ -156,7 +165,16 @@ async def generate_tech_stack(processed_data: Dict[str, Any], tracker: ProgressT
         # 실행
         parsed_response = await chain.ainvoke(processed_data)
         
-        await tracker.update(status=ProgressStatus.SUCCESS, metadata={"current_step": "tech_stack"})
+        progress = tracker.get_progress()
+        completed_steps = progress.get("completed_steps", [])
+        completed_steps.append("tech_stack")
+        await tracker.update(
+            status=ProgressStatus.SUCCESS, 
+            metadata={
+                "current_step": "tech_stack",
+                "completed_steps": completed_steps
+            }
+        )
         return parsed_response
         
     except Exception as e:
@@ -254,7 +272,16 @@ async def generate_coverletter(processed_data: Dict[str, Any], tracker: Progress
         memory.chat_memory.add_user_message(user_message)
         memory.chat_memory.add_ai_message(ai_response)
         
-        await tracker.update(status=ProgressStatus.SUCCESS, metadata={"current_step": "cover_letter"})
+        progress = tracker.get_progress()
+        completed_steps = progress.get("completed_steps", [])
+        completed_steps.append("cover_letter")
+        await tracker.update(
+            status=ProgressStatus.SUCCESS, 
+            metadata={
+                "current_step": "cover_letter",
+                "completed_steps": completed_steps
+            }
+        )
         return parsed_response
         
     except Exception as e:

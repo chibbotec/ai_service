@@ -197,7 +197,11 @@ async def get_custom_resume_status(user_id: str) -> Dict[str, Any]:
     progress = tracker.get_progress()
     logger.info(f"Progress for user {user_id}: {progress}")
 
-    if progress.get("success", 0) > 0 or progress.get("result"):
+    # 모든 단계가 완료되었는지 확인
+    completed_steps = progress.get("completed_steps", [])
+    all_steps_completed = len(completed_steps) == 3 and "start" in completed_steps and "tech_stack" in completed_steps and "cover_letter" in completed_steps
+
+    if all_steps_completed and progress.get("result"):
         if progress["failed"] > 0:
             return {"error": "커스텀 이력서 생성 실패"}
         return {
@@ -206,10 +210,23 @@ async def get_custom_resume_status(user_id: str) -> Dict[str, Any]:
             "message": progress.get("message", "커스텀 이력서 생성이 완료되었습니다.")
         }
     else:
+        # 현재 진행 중인 단계 확인
+        current_step = progress.get("current_step", "custom_resume_generation")
+        step_status = {
+            "start": "completed" if "start" in completed_steps else "waiting",
+            "tech_stack": "completed" if "tech_stack" in completed_steps else "waiting",
+            "cover_letter": "completed" if "cover_letter" in completed_steps else "waiting"
+        }
+        
+        # 현재 진행 중인 단계 표시
+        if current_step in step_status:
+            step_status[current_step] = "processing"
+        
         return {
             "status": "processing",
             "progress": progress,
-            "current_step": progress.get("current_step", "custom_resume_generation"),
+            "current_step": current_step,
+            "step_status": step_status,
             "message": progress.get("message", "커스텀 이력서 생성 중입니다."),
             "elapsed_time": time.time() - progress.get("start_time", time.time())
         }
