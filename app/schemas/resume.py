@@ -131,7 +131,7 @@ class Project(BaseModel):
     """프로젝트 정보"""
     name: str = Field(description="프로젝트 이름")
     techStack: List[str] = Field(description="사용된 기술 스택", default_factory=list)
-    role: str = Field(description="프로젝트에서의 역할")
+    role: List[str] = Field(description="프로젝트에서의 역할")
 
 class Career(BaseModel):
     """경력 정보"""
