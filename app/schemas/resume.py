@@ -169,6 +169,7 @@ class ResumeSummary(BaseModel):
 class JobDescriptionRequest(BaseModel):
     url: str = Field(description="채용 공고 URL")
 
+# JobAnalysis 스키마도 실제 데이터에 맞게 수정
 class JobAnalysis(BaseModel):
     company: str = Field(description="회사명")
     position: str = Field(description="직무/포지션")
@@ -177,7 +178,8 @@ class JobAnalysis(BaseModel):
     career: str = Field(description="경력 요구사항")
     resumeRequirements: List[str] = Field(description="이력서 요구사항 목록")
     recruitmentProcess: List[str] = Field(description="채용 절차 목록")
-    additionalInfo: List[str] = Field(description="추가 정보 목록")
+    # additionalInfo를 선택적으로 변경 (프론트에서 항상 보내지 않을 수 있음)
+    additionalInfo: Optional[List[str]] = Field(description="추가 정보 목록", default_factory=list)
 
 class AiAnalysisResponse(BaseModel):
     analysis: JobAnalysis
@@ -191,14 +193,15 @@ class Link(BaseModel):
     url: str
 
 class ResumeCareer(BaseModel):
-    period: str
     company: str
     position: str
     isCurrent: bool
-    startDate: date
-    endDate: Optional[date] = None
+    startDate: str
+    endDate: Optional[str] = None
     description: str
     achievement: str
+    # 선택적 필드
+    period: Optional[str] = None
 
 class ResumeProject(BaseModel):
     name: str
@@ -230,33 +233,9 @@ class CoverLetter(BaseModel):
     title: str
     content: str
 
-class ResumeDetail(BaseModel):
-    id: str
-    spaceId: int
-    author: Author
-    createdAt: datetime
-    updatedAt: datetime
-    title: str
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    careerType: Optional[str] = None
-    position: Optional[str] = None
-    techStack: Optional[List[str]] = None
-    techSummary: Optional[str] = None
-    links: Optional[List[Link]] = None
-    careers: Optional[List[ResumeCareer]] = None
-    projects: Optional[List[ResumeProject]] = None
-    educations: Optional[List[Education]] = None
-    certificates: Optional[List[Certificate]] = None
-    coverLetters: Optional[List[CoverLetter]] = None
-
-    class Config:
-        from_attributes = True
-
 class PortfolioDuration(BaseModel):
-    startDate: datetime
-    endDate: datetime
+    startDate: str
+    endDate: str
 
 class PortfolioArchitecture(BaseModel):
     communication: str
@@ -266,7 +245,7 @@ class PortfolioContents(BaseModel):
     techStack: str
     summary: str
     description: str
-    roles: List[str]
+    roles: Optional[List[str]] = None
     features: Dict[str, List[str]]
     architecture: PortfolioArchitecture
 
@@ -286,7 +265,7 @@ class SavedFile(BaseModel):
     repository: str
     savedPath: str
 
-class PortfolioDetail(BaseModel):
+class ResumePortfolio(BaseModel):
     id: str
     spaceId: int
     title: str
@@ -297,22 +276,26 @@ class PortfolioDetail(BaseModel):
     memberCount: Optional[int] = None
     memberRoles: Optional[str] = None
     contents: PortfolioContents
+    # 선택적 필드들 - 프론트에서 보내지 않을 수 있음
     thumbnailUrl: Optional[str] = None
-    publicAccess: bool
-    githubRepos: Optional[List[GitHubRepo]] = None
-    savedFiles: Optional[List[SavedFile]] = None
-    createdAt: datetime
-    updatedAt: datetime
+    githubRepos: Optional[List[Any]] = None
+    savedFiles: Optional[List[Any]] = None
+    createdAt: Optional[str] = None  # datetime -> str로 변경 (프론트에서 문자열로 보냄)
+    updatedAt: Optional[str] = None  # datetime -> str로 변경
 
     class Config:
         from_attributes = True
 
+# CustomResumeRequest 스키마 수정
 class CustomResumeRequest(BaseModel):
-    type: str
-    jobDescription: Optional[JobAnalysis]
-    selectedResume: Optional[ResumeDetail]
-    selectedPortfolio: Optional[List[Dict[str, Any]]]
-    additionalInfo: Optional[List[str]]
+    jobDescription: Optional[JobAnalysis] = None
+    selectedPortfolios: Optional[List[ResumePortfolio]] = None
+    careers: Optional[List[ResumeCareer]] = None
+    additionalInfo: Optional[List[str]] = Field(default_factory=list)
+
+    class Config:
+        # 추가 필드 허용 (향후 확장성을 위해)
+        extra = "ignore"
 
 class CoverLetterSection(BaseModel):
     title: str

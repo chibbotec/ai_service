@@ -92,11 +92,8 @@ async def create_custom_resume(space_id: str, user_id: str, request: CustomResum
         # 요청 데이터 검증
         if not request.jobDescription:
             raise HTTPException(status_code=400, detail="채용 공고 정보가 필요합니다.")
-        
-        if request.type == "resume" and not request.selectedResume:
-            raise HTTPException(status_code=400, detail="이력서 정보가 필요합니다.")
-        
-        if request.type == "portfolio" and not request.selectedPortfolio:
+
+        if not request.selectedPortfolios:
             raise HTTPException(status_code=400, detail="포트폴리오 정보가 필요합니다.")
         
         # ProgressTracker 초기화

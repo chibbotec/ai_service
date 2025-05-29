@@ -1,5 +1,5 @@
 import time
-from app.schemas.resume import CustomResumeRequest, CustomResumeResponse, JobAnalysis, ResumeDetail
+from app.schemas.resume import CustomResumeRequest, CustomResumeResponse, JobAnalysis
 from dotenv import load_dotenv
 from typing import Dict, Any, Union, Optional
 from app.utils.progress_tracker import ProgressTracker, ProgressStatus
@@ -7,7 +7,9 @@ from app.chain.custom_resume_chain import (
     generate_start,
     generate_tech_stack,
     generate_coverletter,
-    clear_user_memory
+    clear_user_memory,
+    generate_portfolio,
+    generate_career
 )
 from langchain.memory import ConversationBufferMemory
 import logging
@@ -22,7 +24,6 @@ def preprocess_request_data(request: CustomResumeRequest) -> Dict[str, Any]:
     CustomResumeRequest 데이터를 전처리하여 필요한 정보만 추출합니다.
     """
     processed_data = {
-        "type": request.type,
         "job_description": "",
         "additional_info": request.additionalInfo or ""
     }
@@ -77,110 +78,67 @@ def preprocess_request_data(request: CustomResumeRequest) -> Dict[str, Any]:
                     job_info.append(f"- {req}")
         processed_data["job_description"] = "\n".join(job_info)
     
-    # type에 따라 이력서 또는 포트폴리오 정보 처리
-    if request.type == "resume" and request.selectedResume:
-        resume_info = []
-        resume = request.selectedResume
-        if hasattr(resume, '__dict__'):
-            resume_dict = resume.__dict__ if hasattr(resume, '__dict__') else resume
-        elif isinstance(resume, dict):
-            resume_dict = resume
-        else:
-            resume_dict = {}
-        title = resume_dict.get('title') or getattr(resume, 'title', None)
-        if title:
-            resume_info.append(f"이력서 제목: {title}")
-        tech_stack = resume_dict.get('techStack') or getattr(resume, 'techStack', None)
-        if tech_stack:
-            resume_info.append(f"보유 기술: {', '.join(tech_stack)}")
-        tech_summary = resume_dict.get('techSummary') or getattr(resume, 'techSummary', None)
-        if tech_summary:
-            resume_info.append(f"기술 요약: {tech_summary}")
-        careers = resume_dict.get('careers') or getattr(resume, 'careers', None)
-        if careers and len(careers) > 0:
-            resume_info.append("\n경력 사항:")
-            for career in careers:
-                if isinstance(career, dict):
-                    position = career.get('position', '')
-                    company = career.get('company', '')
-                    period = career.get('period', '')
-                    achievement = career.get('achievement', '')
-                else:
-                    position = getattr(career, 'position', '')
-                    company = getattr(career, 'company', '')
-                    period = getattr(career, 'period', '')
-                    achievement = getattr(career, 'achievement', '')
-                resume_info.append(f"- {position} ({company})")
-                if period:
-                    resume_info.append(f"  기간: {period}")
-                if achievement:
-                    resume_info.append(f"  성과: {achievement}")
-        projects = resume_dict.get('projects') or getattr(resume, 'projects', None)
-        if projects and len(projects) > 0:
-            resume_info.append("\n프로젝트:")
-            for project in projects:
-                if isinstance(project, dict):
-                    name = project.get('name', '')
-                    member_roles = project.get('memberRoles', '')
-                    role = project.get('role', '')
-                    tech_stack = project.get('techStack', [])
-                    description = project.get('description', '')
-                    github_link = project.get('githubLink', '')
-                    deploy_link = project.get('deployLink', '')
-                else:
-                    name = getattr(project, 'name', '')
-                    member_roles = getattr(project, 'memberRoles', '')
-                    role = getattr(project, 'role', '')
-                    tech_stack = getattr(project, 'techStack', [])
-                    description = getattr(project, 'description', '')
-                    github_link = getattr(project, 'githubLink', '')
-                    deploy_link = getattr(project, 'deployLink', '')
-                if name:
-                    resume_info.append(f"- {name}")
-                if member_roles:
-                    resume_info.append(f"  맡은 역할: {member_roles}")
-                if role:
-                    resume_info.append(f"  주요 역할 및 성과: {role}")
-                if tech_stack:
-                    resume_info.append(f"  기술 스택: {', '.join(tech_stack)}")
-                if description:
-                    resume_info.append(f"  설명: {description}")
-                if github_link:
-                    resume_info.append(f"  GitHub: {github_link}")
-                if deploy_link:
-                    resume_info.append(f"  배포 링크: {deploy_link}")
-        processed_data["resume_info"] = "\n".join(resume_info)
-    elif request.type == "portfolio" and request.selectedPortfolio:
+    if request.selectedPortfolios:
         portfolio_info = []
-        for portfolio in request.selectedPortfolio:
+        for portfolio in request.selectedPortfolios:
             if hasattr(portfolio, 'title') and portfolio.title:
                 portfolio_info.append(f"\n포트폴리오 제목: {portfolio.title}")
             if hasattr(portfolio, 'memberRoles') and portfolio.memberRoles:
                 portfolio_info.append(f"담당 역할: {portfolio.memberRoles}")
+            if hasattr(portfolio, 'memberCount') and portfolio.memberCount:
+                portfolio_info.append(f"참여 인원 수: {portfolio.memberCount}")
+            if hasattr(portfolio, 'startDate') and portfolio.startDate:
+                portfolio_info.append(f"시작일: {portfolio.startDate}")
+            if hasattr(portfolio, 'endDate') and portfolio.endDate:
+                portfolio_info.append(f"종료일: {portfolio.endDate}")
+            if hasattr(portfolio, 'githubLink') and portfolio.githubLink:
+                portfolio_info.append(f"GitHub 링크: {portfolio.githubLink}")
+            if hasattr(portfolio, 'deployLink') and portfolio.deployLink:
+                portfolio_info.append(f"배포 링크: {portfolio.deployLink}")
+            
             if hasattr(portfolio, 'contents') and portfolio.contents:
                 contents = portfolio.contents
-                if hasattr(contents, 'summary') and contents.summary:
+                if contents.summary:
                     portfolio_info.append(f"\n프로젝트 요약: {contents.summary}")
-                if hasattr(contents, 'description') and contents.description:
+                if contents.description:
                     portfolio_info.append(f"프로젝트 개요: {contents.description}")
-                if hasattr(contents, 'techStack') and contents.techStack:
+                if contents.techStack:
                     portfolio_info.append(f"사용 기술: {contents.techStack}")
-                if hasattr(contents, 'roles') and contents.roles:
+                if contents.roles:
                     portfolio_info.append(f"주요 역할: {', '.join(contents.roles)}")
-                if hasattr(contents, 'features') and contents.features:
+                if contents.features:
                     portfolio_info.append("\n주요 기능:")
                     for feature, descriptions in contents.features.items():
                         portfolio_info.append(f"- {feature}:")
                         for desc in descriptions:
                             portfolio_info.append(f"  * {desc}")
-                if hasattr(contents, 'architecture') and contents.architecture:
+                if contents.architecture:
                     portfolio_info.append("\n아키텍처:")
-                    if hasattr(contents.architecture, 'communication'):
-                        portfolio_info.append(f"- 통신 방식: {contents.architecture.communication}")
-                    if hasattr(contents.architecture, 'deployment'):
-                        portfolio_info.append(f"- 배포 구조: {contents.architecture.deployment}")
+                    portfolio_info.append(f"- 통신 방식: {contents.architecture.communication}")
+                    portfolio_info.append(f"- 배포 구조: {contents.architecture.deployment}")
             portfolio_info.append("\n" + "="*50 + "\n")
         processed_data["portfolio_info"] = "\n".join(portfolio_info)
+
+    if request.careers:
+        career_info = []
+        for career in request.careers:
+            if career.company:
+                career_info.append(f"회사: {career.company}")
+            if career.position:
+                career_info.append(f"직무: {career.position}")
+            if career.startDate:
+                career_info.append(f"시작일: {career.startDate}")
+            if career.endDate:
+                career_info.append(f"종료일: {career.endDate}")
+            if career.isCurrent:
+                career_info.append("현재 재직 중")
+            if career.description:
+                career_info.append(f"업무 설명: {career.description}")
+            if career.achievement:
+                career_info.append(f"주요 성과: {career.achievement}")
+            career_info.append("\n" + "-"*30 + "\n")
+        processed_data["career_info"] = "\n".join(career_info)
+
     logger.info(f"Processed data for user: {processed_data}")
     return processed_data
 
@@ -199,7 +157,7 @@ async def get_custom_resume_status(user_id: str) -> Dict[str, Any]:
 
     # 모든 단계가 완료되었는지 확인
     completed_steps = progress.get("completed_steps", [])
-    all_steps_completed = len(completed_steps) == 3 and "start" in completed_steps and "tech_stack" in completed_steps and "cover_letter" in completed_steps
+    all_steps_completed = len(completed_steps) == 5 and all(step in completed_steps for step in ["start", "portfolio", "career", "tech_stack", "cover_letter"])
 
     if all_steps_completed and progress.get("result"):
         if progress["failed"] > 0:
@@ -214,6 +172,8 @@ async def get_custom_resume_status(user_id: str) -> Dict[str, Any]:
         current_step = progress.get("current_step", "custom_resume_generation")
         step_status = {
             "start": "completed" if "start" in completed_steps else "waiting",
+            "portfolio": "completed" if "portfolio" in completed_steps else "waiting",
+            "career": "completed" if "career" in completed_steps else "waiting",
             "tech_stack": "completed" if "tech_stack" in completed_steps else "waiting",
             "cover_letter": "completed" if "cover_letter" in completed_steps else "waiting"
         }
@@ -242,7 +202,7 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
         
         # ProgressTracker 초기화
         tracker = ProgressTracker(
-            total=3, 
+            total=5,  # Updated to include all steps: start, portfolio, career, tech_stack, cover_letter
             log_interval=10,
             log_prefix="Custom Resume Generation"
         )
@@ -278,6 +238,34 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
                 user_id=user_id
             )
 
+            response_portfolio = await generate_portfolio(
+                processed_data=processed_data,
+                tracker=tracker,
+                user_id=user_id
+            )
+
+            # 경력 정보가 있는 경우에만 경력 분석 실행
+            response_career = None
+            if request.careers:
+                response_career = await generate_career(
+                    processed_data=processed_data,
+                    tracker=tracker,
+                    user_id=user_id
+                )
+            else:
+                # 경력 정보가 없는 경우 해당 단계 완료 처리
+                progress = tracker.get_progress()
+                completed_steps = progress.get("completed_steps", [])
+                completed_steps.append("career")
+                await tracker.update(
+                    status=ProgressStatus.SUCCESS,
+                    metadata={
+                        "current_step": "career",
+                        "completed_steps": completed_steps,
+                        "message": "경력 정보가 없어 해당 단계를 건너뜁니다."
+                    }
+                )
+
             logger.info("Generating tech stack analysis...")
             response_tech_stack = await generate_tech_stack(
                 processed_data=processed_data,
@@ -295,6 +283,7 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
             # 결과 구성
             result = {
                 "position": response_position,
+                "portfolio": response_portfolio,
                 "tech_stack": {
                     "tech_stack": response_tech_stack.tech_stack,
                     "tech_summary": response_tech_stack.tech_summary
@@ -308,6 +297,10 @@ async def generate_custom_resume(user_id: str, request: CustomResumeRequest) -> 
                     ]
                 }
             }
+            
+            # 경력 정보가 있는 경우에만 결과에 추가
+            if response_career:
+                result["career"] = response_career
             
             logger.info("Custom resume generation completed successfully")
             logger.info(f"Final result for user {user_id}: {result}")
