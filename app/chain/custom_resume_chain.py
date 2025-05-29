@@ -60,7 +60,7 @@ class PortfolioAnalysis(BaseModel):
     name: str = Field(description="프로젝트명")
     description: str = Field(description="프로젝트 소개")
     techStack: List[str] = Field(description="기술 스택")
-    role: str = Field(description="주요 역할 및 성과")
+    role: List[str] = Field(description="주요 역할 및 성과")
     startDate: str = Field(description="시작일 (YYYY-MM-DD)")
     endDate: str = Field(description="종료일 (YYYY-MM-DD)")
     memberCount: int = Field(description="참여 인원 수")
@@ -232,7 +232,7 @@ async def generate_portfolio(processed_data: Dict[str, Any], tracker: ProgressTr
             "name": "프로젝트명",
             "description": "프로젝트 소개",
             "techStack": ["기술1", "기술2", "기술3"],
-            "role": "주요 역할 및 성과",
+            "role": ["주요 역할 및 성과1", "주요 역할 및 성과2", "주요 역할 및 성과3"],
             "startDate": "YYYY-MM-DD",
             "endDate": "YYYY-MM-DD",
             "memberCount": 5,
